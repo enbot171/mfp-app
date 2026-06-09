@@ -2,28 +2,27 @@
 
 ## Purpose
 
-A seasonal internal tool used every ~6 months when a new pledge cycle opens. Admins upload a Pabbly form export (CSV/XLSX), the app matches it against the Master Google Sheet, flags discrepancies, and lets admins push updates in controlled batches.
+A seasonal internal tool used every ~6 months when a new pledge cycle opens, and on an ongoing basis for tracking monthly bank payments. Admins work from a Master Google Sheet shared with a service account — no browser OAuth required.
 
 ---
 
-## Seasonal Workflow
+## High-Level Flow
 
 ```
-Login
-  → Connect to Master Sheet (Sheet ID + tab name)
-  → Upload Pabbly CSV
-      → new rows appended to _pabbly_queue tab (duplicate Ticket IDs skipped)
-      → compared against master, preview shown
-  → Push clean rows  (Update + clean New rows, no issues)
-  → For Review rows with field mismatches:
-      Option A — resolve manually in the table (Current / New toggles)
-      Option B — Export review report → regional coordinator fills in decisions
-                  → Admin uploads filled response → resolved rows flip to Update
-  → Push resolved rows
-  → Repeat until queue is empty → Done screen
+Login  →  Connect to Master Sheet (Sheet ID + tab name)
+       →  Home screen — choose workflow:
+
+    Pledges                          Payments
+    ───────                          ────────
+    Upload Pabbly CSV/XLSX           Upload bank statement (UOB/DBS)
+    → auto-matched against master    → auto-matched against master
+    → review preview                 → review preview
+    → push rows                      → push rows
+    → Revert last push (if wrong)    → Revert last push (if wrong)
+    → Discard file (start over)      → Discard file (start over)
 ```
 
-If the admin leaves mid-session, decisions and queue state persist in the `_pabbly_queue` tab. On next visit a **Resume** banner appears — clicking it restores the table exactly as left, including all toggle choices and region selections.
+Closing the browser mid-session is safe — the in-progress file is saved to a Google Sheets queue tab and auto-resumed on next visit.
 
 ---
 
@@ -40,48 +39,32 @@ If the admin leaves mid-session, decisions and queue state persist in the `_pabb
 | G | Email | |
 | H | Service | `English`, `Mandarin`, etc. — **never overwritten** |
 | I | Pledge Amount | Numeric string, e.g. `1000.00` |
-| J+ | Monthly columns | `MAR`, `APR`, `MAY`, … — managed by Phase 2 (payments), never touched |
+| J+ | Monthly columns | `MAR`, `APR`, `MAY`, … — written by the Payment workflow |
 
 ---
 
-## Queue Tab (`_pabbly_queue`)
+## Session Persistence
 
-A hidden tab created automatically in the Master Sheet. Stores all uploaded CSV rows with a `status` column appended as the last column.
+When a file is uploaded and parsed, the raw rows are saved to a Google Sheets queue tab:
 
-### Row statuses
+| Workflow | Queue tab | Log tab |
+|----------|-----------|---------|
+| Pledges | `_pledge_queue_` | `_pledge_log_` |
+| Payments | `_payment_queue_` | `_payment_log_` |
 
-| Value | Meaning |
-|-------|---------|
-| `""` (empty) | Pending — shown in the preview table |
-| `{"overrides":{...}}` | Pending with saved decisions — shown in preview with toggles pre-filled |
-| `"pushed"` | Successfully written to master sheet |
-| `"dismissed"` | Removed by admin (individual dismiss, bulk error dismiss, or discard all) |
+On page load, the app checks for a pending queue tab first. If one exists, it auto-resumes directly into the review preview (re-fetching master sheet data and re-running matching so already-pushed rows are filtered out). No manual "resume" step required.
 
-Rows are **never deleted** from the queue tab — only their status changes. This means:
-- Re-uploading the same CSV skips already-known rows (any status) by Ticket ID
-- All history is preserved in the tab as an audit log
-- Decisions saved as JSON in the status column survive page refresh and resume correctly
-
-### "Dismiss all pending and start fresh"
-
-Marks all pending rows as `"dismissed"`. Pushed rows and their history are preserved. If the same CSV is re-uploaded after dismissing, those rows are still recognised by Ticket ID and skipped.
+The queue tab is deleted when all rows in the session are pushed, or when "Discard file" is confirmed.
 
 ---
 
-## Multi-Upload Deduplication
+## Pledge Workflow
 
-Every Pabbly form submission has a unique **Ticket ID** (column 13 of the CSV). On each upload:
+### File format
 
-1. The app reads all Ticket IDs already in the queue tab (any status — pending, pushed, dismissed)
-2. Rows in the new CSV whose Ticket ID is already known are silently skipped
-3. Only genuinely new Ticket IDs are appended to the queue
-4. A skip count banner appears in the preview: `"X rows already queued or processed — skipped"`
+CSV or XLSX exported from Pabbly Connect. Each row is one pledge submission.
 
-This means uploading the same CSV twice, or uploading a new cumulative export that includes old submissions, is always safe.
-
----
-
-## Pabbly CSV Column Mapping
+### Pabbly Column Mapping
 
 | Pabbly column (index) | Master field | Notes |
 |-----------------------|--------------|-------|
@@ -89,12 +72,166 @@ This means uploading the same CSV twice, or uploading a new cumulative export th
 | 2 — MFP number | MF Number | Auto-corrected: missing `MF` prefix is prepended |
 | 1 or 3 — Partial NRIC | Partial NRIC | Col 3 preferred; falls back to col 1 |
 | 4 — Full Name | Full Name | |
-| 5 — Region string | Region | `"North Region"` → `"North"`, unrecognised values → blank (requires manual selection) |
+| 5 — Region string | Region | `"North Region"` → `"North"`, unrecognised → blank (requires manual selection) |
 | 8 — Contact Number | Contact Number | |
 | 9 — Email Address | Email | |
 | 10 — Monthly Pledge Amount | Pledge Amount | Strips `$`, commas, spaces |
 | 11 — Additional pledge | — | Non-empty → pledge is additive (stacked on top of existing) |
-| 13 — Ticket Id | — | Used for deduplication only, never written to master |
+| 13 — Ticket ID | — | Used for deduplication only, never written to master |
+
+### Matching Logic
+
+```
+For each Pabbly row:
+  1. Normalise MF number (prepend "MF" if missing)
+  2. Look up by MF number in master
+       Found    → matched, cross-validate fields
+       Not found → MF_NOT_FOUND error, fall through to NRIC
+  3. If not yet matched AND returning pledger AND NRIC provided → look up by NRIC
+       Found    → matched (MF_NOT_FOUND cleared), cross-validate fields
+       Not found → not matched
+  4. If matched:
+       No errors/warnings → Update
+       Has warnings       → Review
+  5. If not matched:
+       "first time" pledge type → New (appended to master)
+       Otherwise               → Error (returning pledger not found)
+```
+
+On update: only Pabbly-sourced fields are patched. Blank Pabbly fields never overwrite existing master values. Service (col H) and monthly columns are never touched.
+
+On insert: MF number is generated from NRIC — `"MF" + NRIC`. If taken, try `MF + NRIC + "A"`, `"B"`, … up to Z.
+
+### Row statuses in preview
+
+| Status | Colour | Meaning |
+|--------|--------|---------|
+| **Update** | Green | Matched, no issues — safe to push |
+| **Review** | Amber | Matched but has field mismatches |
+| **New** | Violet | First-time pledger, will be appended |
+| **Error** | Red | Returning pledger not found, or blocking error |
+
+### Field Mismatch Handling
+
+When a matched row has differing values between Pabbly and master, it is flagged **Review**. Each mismatched cell shows two buttons — **Current** (master value) and **New** (Pabbly value). The admin's choice is applied when the row is pushed.
+
+Affected fields: Full Name, Region, Partial NRIC, Contact Number, Email.
+
+### Regional Review Export / Response Flow
+
+For Review rows to be sent to a regional coordinator:
+
+1. Click **Export review report** → choose region → download Excel
+2. The Excel has one row per mismatched field: MF No., Ref No., Full Name, Field, Current, New, Decision, Notes. Hidden columns (`_mfNumber`, `_refNo`, `_field`) are used as lookup keys on re-import — do not delete them.
+3. The Decision column has a dropdown restricted to `current` or `new`.
+4. Regional coordinator fills in Decision and returns the file.
+5. Admin clicks **Upload region response** → decisions applied in memory:
+   - `current` → reverts output row to master value
+   - `new` → keeps Pabbly value
+   - Resolved warnings removed; if all resolved → row promoted to Update
+6. Nothing is written to master until the admin explicitly pushes.
+
+### Pledge Amount Logic
+
+```
+If Additional pledge column (col 11) is empty:
+  Pledge Amount = new value  (replaces existing)
+
+If Additional pledge column has any value:
+  Pledge Amount = existing master amount + new value  (stacked)
+```
+
+### "Add new CSV" (merge)
+
+In the preview, **Add new CSV** appends rows from a second Pabbly export into the current session. Rows already in the preview (matched by Ticket ID) are skipped. Only genuinely new Ticket IDs are added.
+
+After merging, an **Undo last add** button (amber) appears. Clicking it reverts the session to the pre-merge state and updates the queue tab, including if the browser is closed before undoing.
+
+### Deduplication
+
+Ticket IDs already present in `_pledge_log_` are filtered out on file upload and on resume, so already-pushed rows never appear in the preview.
+
+---
+
+## Payment Workflow
+
+### Supported bank formats
+
+| Format ID | Bank | Account type |
+|-----------|------|--------------|
+| `format1` | Generic | — |
+| `uob_pn` | UOB | Personal |
+| `uob_bo` | UOB | Business |
+| `dbs_pn` | DBS | Personal |
+| `dbs_bo` | DBS | Business |
+| `bank5` | — | — |
+
+The parser detects the format automatically from the sheet header structure. Multi-sheet XLSX files are supported — each sheet is parsed independently.
+
+### Matching Logic
+
+Each parsed bank transaction is matched to a master row by MF number (extracted from the reference/description field) or by amount. The matched cell is the monthly column (`MAR`, `APR`, etc.) corresponding to the transaction date. If the column does not yet exist, an **Add missing months** prompt appears.
+
+### Deduplication
+
+Payment fingerprints (`date|mfNumber|amount|reference`) already present in `_payment_log_` are filtered out on file upload and on resume.
+
+---
+
+## Preview Actions (both workflows)
+
+### Action bar buttons
+
+| Button | When visible | Action |
+|--------|-------------|--------|
+| **Add new CSV** | Pledge, always | Merge rows from another Pabbly export |
+| **Undo last add** | Pledge, after Add new CSV | Revert the last merge — restores pre-merge queue state |
+| **Upload region response** | Pledge, always | Import filled Excel → apply decisions to Review rows |
+| **Discard file** | Always | Confirm prompt → delete queue tab, clear session, return to history or upload |
+| **Revert last push** | After any push | Undo the last Google Sheets write — restores master cells and returns rows to preview |
+| **Update X selected** | Pledge | Push all checked rows |
+| **Push X selected** | Payment | Push all checked matched rows |
+
+### In-table actions (pledge only)
+
+| Button | Action |
+|--------|--------|
+| ↑ (per row) | Push single row |
+| ✕ (per row) | Dismiss row from preview |
+| **Dismiss X errors** | Mark all error rows dismissed |
+| **Export review report** | Open region picker → download Excel |
+| **Add X new** | Push all clean New rows |
+| **Update X clean** | Push all clean Update rows |
+
+---
+
+## Revert
+
+After a push, **Revert last push** undoes the most recent write to Google Sheets:
+
+- For pledges: restores all master cells that were updated and deletes any rows that were appended. The reverted rows return to the preview.
+- For payments: restores the monthly amount cells that were overwritten. The reverted rows return to the preview.
+
+The revert snapshot is kept in browser memory only. It is cleared when:
+- Another push is made (that push becomes the new revert target, after user confirms)
+- The page is refreshed or closed (session memory lost — the Google Sheets write stands)
+- The rows are reverted successfully
+
+The log tab marks reverted entries as `"reverted"` rather than deleting them.
+
+---
+
+## Audit Logs
+
+Both log tabs are append-only. Each pushed record gets a row with a fingerprint (for dedup on future uploads), identifying fields, and a timestamp. Reverted rows are updated in-place to status `"reverted"`.
+
+### `_pledge_log_` columns
+
+`Fingerprint | MF No. | Full Name | Pledge Amount | Service | Entry Date | Status | Pushed At`
+
+### `_payment_log_` columns
+
+`Fingerprint | MF No. | Month | Date | Amount | Source | Status | Pushed At`
 
 ---
 
@@ -104,135 +241,10 @@ Format: **`MF` + exactly 3 digits + 1 uppercase letter** (e.g. `MF123A`).
 
 | Raw input | Action | Result |
 |-----------|--------|--------|
-| `MF123A` | Already valid — uppercase | `MF123A` |
+| `MF123A` | Already valid | `MF123A` |
 | `mf123a` | Uppercase | `MF123A` |
 | `123A` | Missing prefix — prepend `MF` | `MF123A` → flag `MF_AUTOCORRECTED` |
 | *(blank)* | No MF provided | Falls through to NRIC lookup |
-
----
-
-## Matching Logic
-
-```
-For each Pabbly row:
-  1. Normalise MF number
-  2. If MF number provided → look up in master by MF number
-       Found    → matched, cross-validate fields
-       Not found → push MF_NOT_FOUND error, fall through to NRIC
-  3. If not yet matched AND returning pledger AND NRIC provided → look up by Partial NRIC
-       Found    → matched, MF_NOT_FOUND error cleared, cross-validate fields
-       Not found → not matched
-  4. If matched → classify:
-       No errors or warnings → Update
-       Has errors or warnings → Review
-  5. If not matched:
-       Pledge type contains "first time" → New  (MF assigned from NRIC, appended)
-       Otherwise                         → Error (returning pledger not found)
-```
-
-**On update (matched rows):** Only fields sourced from Pabbly are patched. Blank Pabbly fields do not overwrite existing master values. `Service` and all monthly columns are never touched.
-
-**On insert (new rows):** MF number is generated at preview time from the person's NRIC:
-
-```
-base MF = "MF" + NRIC  (e.g. NRIC "321D" → "MF321D")
-
-If base MF is free              → use it, Ref No. = blank
-If base MF is taken → try MF+"A" → use it if free, Ref No. = "A"
-                    → try MF+"B" → use it if free, Ref No. = "B"
-                    → … continues through A–Z
-```
-
-Multiple new rows with the same NRIC in the same upload are each assigned the next free letter.
-
----
-
-## Row Status in Preview
-
-| Status | Colour | Push button | Meaning |
-|--------|--------|-------------|---------|
-| **Update** | Green | ✓ | Matched in master, no issues — safe to push |
-| **Review** | Amber | ✓ | Matched but has field mismatches or validation warnings |
-| **New** | Violet | ✓ | First-time pledger, will be appended to master |
-| **Error** | Red | ✗ | Returning pledger not found, or has blocking errors |
-
----
-
-## Field Mismatch Handling
-
-When a matched row has differing field values between Pabbly and master, it is flagged `Review`. Each mismatched cell shows two buttons:
-
-- **Current** — value currently in Google Sheets
-- **New** — value from the Pabbly form (default selection)
-
-The selected choice turns green. The admin's choice is stored immediately in the queue tab status column (debounced 800ms) and survives a page refresh. The choice is applied to the output row when the row is pushed.
-
-Affected fields: Full Name, Region, Partial NRIC, Contact Number, Email.
-
----
-
-## Missing Region Handling
-
-If a row's region is blank or unrecognised (e.g. the pledger selected "I Am Not Sure"), a `MISSING_REGION` warning is shown and a **region dropdown** appears in the Region cell. The admin picks the correct region before pushing.
-
-The selected region is persisted to the queue tab immediately and restored on resume.
-
----
-
-## Regional Review Export / Response Flow
-
-For `Review` rows the admin wants a regional coordinator to decide:
-
-1. Click **Export review report** → choose a region → download Excel file
-2. The file has one row per mismatched field:
-
-   | Column | Notes |
-   |--------|-------|
-   | MF No., Ref No., Full Name, Field, Current, New | Visible to reviewer |
-   | Decision | Reviewer types `Current` or `New`. Rows left blank stay under review |
-   | Notes | Free text, ignored on import |
-   | `_mfNumber`, `_refNo`, `_field` | Hidden — used as lookup keys on re-import. Do not delete |
-
-3. Regional coordinator fills in the Decision column and returns the file
-4. Admin clicks **Upload region response** → decisions are applied in memory:
-   - `Current` → output row reverts to master value
-   - `New` → output row keeps pabbly value (already set)
-   - Resolved mismatch warnings are removed from the row's error badges
-   - If all mismatches resolved → row promoted from `Review` → `Update`
-   - Partial decisions → row stays `Review` with only unresolved fields remaining
-5. Decisions are saved to the queue tab status column — if the admin leaves before pushing, decisions are restored on resume
-6. **Nothing is written to master until the admin explicitly pushes**
-
----
-
-## Decision Persistence and Resume
-
-All field-level decisions (Current/New toggles, region dropdown, and response file imports) are stored in the queue tab's `status` column as JSON:
-
-```
-{"overrides":{"1":"master","5":"pabbly","2":"North"}}
-```
-
-Keys are master column indices; values are `"master"`, `"pabbly"`, or a literal value (for region). On resume:
-- Pending rows with JSON status show in the preview with toggles pre-filled
-- The row stays `Review` (amber) — `matchType` is always recomputed fresh from current master data
-- Pushing the row applies the stored decisions to the output — identical result to resolving via the response file
-
----
-
-## Pledge Amount Logic
-
-```
-If Additional pledge column (col 11) is empty:
-  Pledge Amount = new monthly pledge value  (replaces existing)
-
-If Additional pledge column has any value:
-  Pledge Amount = existing master pledge + new monthly pledge value
-```
-
-The pledge column in the preview shows the old amount struck through in grey with the new amount below when stacking.
-
-Monthly columns (MAR, APR, MAY, …) are **never written** by this app.
 
 ---
 
@@ -240,74 +252,23 @@ Monthly columns (MAR, APR, MAY, …) are **never written** by this app.
 
 | Code | Severity | Condition |
 |------|----------|-----------|
-| `MF_AUTOCORRECTED` | Warning (info) | `MF` prefix was missing and auto-added — no review needed |
-| `MF_NOT_FOUND` | Error | MF number provided but not found in master (clears automatically if NRIC fallback succeeds) |
-| `MF_GENERATION_FAILED` | Error | Could not generate a unique MF from NRIC — all 26 letter suffixes taken |
+| `MF_AUTOCORRECTED` | Info | `MF` prefix was missing and auto-added |
+| `MF_NOT_FOUND` | Error | MF not found in master (clears if NRIC fallback succeeds) |
+| `MF_GENERATION_FAILED` | Error | Could not generate a unique MF from NRIC — all 26 suffixes taken |
 | `NAME_MISMATCH` | Warning | Name in form ≠ name in master |
 | `NRIC_MISMATCH` | Warning | NRIC in form ≠ NRIC in master |
 | `CONTACT_MISMATCH` | Warning | Contact in form ≠ contact in master |
 | `EMAIL_MISMATCH` | Warning | Email in form ≠ email in master |
 | `REGION_MISMATCH` | Warning | Region in form ≠ region in master |
-| `MISSING_REGION` | Warning | Region blank or unrecognised — requires manual selection before push |
+| `MISSING_REGION` | Warning | Region blank or unrecognised — manual selection required before push |
 | `MISSING_CONTACT` | Error | Contact blank in form AND blank in master |
 | `MISSING_EMAIL` | Error | Email blank in form AND blank in master |
 | `MISSING_PLEDGE` | Error | Monthly pledge amount is blank |
 | `INVALID_EMAIL` | Error | Email fails format check |
 | `INVALID_PHONE` | Error | Contact number not 8–15 digits after stripping non-digits |
+| `NO_MONTH_COL` | Error | Monthly column for this transaction's date does not exist in master |
 
-Warnings block auto-selection but do not prevent manual push. Errors block auto-selection and are shown with a red badge; the push button is still available for the admin to override.
-
----
-
-## Push Sequence (all push actions)
-
-1. Validate: new rows must have a region selected
-2. Mark rows as `"pushed"` in the queue tab **first** (before touching master sheet)
-3. Write to master: `batchUpdate` for updates, `append` for new rows
-4. On success: rows removed from preview UI, Done screen shown if queue is empty
-5. On failure: rows reverted to `""` (pending) in queue tab — admin can retry
-
-This order ensures that if the master sheet write fails, the queue tab is cleanly reverted and no data is lost.
-
----
-
-## Table Features
-
-- **Sticky black header** with filter row directly below
-  - Status: multi-select dropdown (Update, Review, New, Error)
-  - Region: multi-select dropdown
-  - Full Name, MF Number, Email: text search
-- **Sort** — click any column label to sort asc/desc; default sort is region A→Z then status priority
-- **Select all** — header checkbox selects/deselects all visible (filtered) rows; indeterminate when partially selected
-- **End-state display** — cells show the value that will be written to master if the row is pushed now
-
----
-
-## Action Buttons
-
-### Summary bar (inside the table)
-
-| Button | Colour | Action |
-|--------|--------|--------|
-| **Dismiss X errors** | Red | Mark error rows as `"dismissed"`, remove from preview |
-| **Export review report** | Amber | Open region picker → download Excel for regional coordinator |
-| **Add X new** | Violet | Push all visible clean New rows → append to master |
-| **Update X clean** | Green | Push all visible Update rows → update master |
-
-### Preview header bar
-
-| Button | Action |
-|--------|--------|
-| **Upload another file** | Return to upload screen (queue persists) |
-| **Upload region response** | Import filled Excel → apply decisions to Review rows |
-| **Update X selected** | Push all checked rows regardless of status |
-
-### Per-row actions
-
-| Icon | Action |
-|------|--------|
-| ↑ | Push this single row |
-| ✕ | Dismiss this row (mark `"dismissed"`, remove from preview) |
+Warnings block auto-selection but do not prevent manual push. Errors block auto-selection; the push button is still available for the admin to override.
 
 ---
 
@@ -323,15 +284,16 @@ Service account approach — no browser OAuth:
 Sheet ID is entered in the app UI (supports pasting the full URL — ID is auto-extracted). Stored in `sessionStorage` for the session; cleared on sign-out.
 
 Write strategy:
-- **Updates**: `batchUpdate` targeting the exact row by 1-based index (`rowIndex + 2` accounts for 1-based rows and the header)
-- **Inserts**: `append` after the last row
-- **Queue tab**: `values.update` starting at `A1` with `RAW` input option to preserve exact strings
+- **Updates**: `batchUpdate` targeting exact rows by 1-based index
+- **Inserts**: `values.append` after the last row
+- **Queue tabs**: `values.update` from A1 with `RAW` input option
+- **Log tabs**: `values.append` (append-only)
 
 ---
 
 ## Auth
 
-Single admin password stored in `ADMIN_PASSWORD` env var. `middleware.js` intercepts every request, reads the `mfp_session` httpOnly cookie, and redirects to `/login` if missing or wrong. Cookie is set on successful login and cleared on sign-out.
+Single admin password stored in `ADMIN_PASSWORD` env var. `proxy.js` intercepts every request, reads the `mfp_session` httpOnly cookie, and redirects to `/login` if missing or incorrect. Cookie is set on successful login and cleared on sign-out.
 
 ---
 
@@ -340,7 +302,7 @@ Single admin password stored in `ADMIN_PASSWORD` env var. `middleware.js` interc
 | Field | Reason |
 |-------|--------|
 | Service (col H) | Set manually per person; not present in Pabbly form |
-| All monthly columns (col J+) | Managed by Phase 2 payment processor |
-| Any master field that is blank in Pabbly but already populated | Blank Pabbly field ≠ intentional clear |
+| All monthly columns (col J+) | Written only by the Payment workflow, never by Pledge |
+| Any master field blank in Pabbly but populated in master | Blank Pabbly field ≠ intentional clear |
 
-Ref No. (col E) is written **only for new rows being appended** and only when the generated MF number conflicts with an existing one. It is never modified on existing rows.
+Ref No. (col E) is written **only for new rows** and only when the generated MF number conflicts with an existing one. It is never modified on existing rows.

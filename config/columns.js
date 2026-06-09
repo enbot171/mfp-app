@@ -27,7 +27,7 @@ export const MASTER_COLS = {
   FULL_NAME: 1,
   REGION: 2,
   PARTIAL_NRIC: 3,
-  REF_NO: 4,         // blank for most records; auto-assigned (1, 2, …) when multiple people share the same MF number
+  REF_NO: 4,         // blank for most records; auto-assigned (A, B, …) when multiple people share the same base MF number
   CONTACT_NUMBER: 5,
   EMAIL: 6,
   SERVICE: 7,        // preserved from master, not overwritten
