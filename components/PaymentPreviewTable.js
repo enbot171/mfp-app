@@ -1,11 +1,18 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import ErrorBadge from "./ErrorBadge";
 
 const STATUS_META = {
   matched: { label: "Matched", badgeCls: "bg-emerald-50 text-emerald-700 border-emerald-200", rowBg: "" },
   error:   { label: "Error",   badgeCls: "bg-red-50 text-red-700 border-red-200",             rowBg: "bg-red-50/60" },
 };
+
+const STATUS_PRIORITY = { matched: 0, error: 1 };
+
+const STATUS_OPTIONS = [
+  { value: "matched", label: "Matched" },
+  { value: "error",   label: "Error" },
+];
 
 function formatDate(date) {
   if (!date) return "—";
@@ -32,6 +39,86 @@ function AmountCell({ current, next, pledge }) {
   );
 }
 
+// ─── Header helpers (shared style with the pledge preview) ─────────────────────
+
+function SortBtn({ col, sortCol, sortDir, onSort, children }) {
+  const active = sortCol === col;
+  return (
+    <button
+      onClick={() => onSort(col)}
+      className="flex items-center gap-1 font-bold text-white uppercase tracking-wider hover:text-white/70 transition-colors text-left w-full text-xs"
+    >
+      {children}
+      <span className={`text-xs ${active ? "text-white" : "text-white/30"}`}>
+        {active ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
+      </span>
+    </button>
+  );
+}
+
+function FilterInput({ placeholder, value, onChange }) {
+  return (
+    <input
+      type="text"
+      placeholder={placeholder}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full px-2 py-1 text-xs border border-white/20 rounded-lg text-black placeholder:text-black/30 focus:outline-none focus:ring-1 focus:ring-white/30 bg-white font-normal normal-case tracking-normal"
+    />
+  );
+}
+
+function CheckboxFilter({ options, selected, onChange, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function onClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  function toggle(value) {
+    const next = new Set(selected);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    onChange(next);
+  }
+
+  const summary = selected.size === 0
+    ? placeholder
+    : selected.size === 1
+    ? options.find((o) => o.value === [...selected][0])?.label ?? [...selected][0]
+    : `${selected.size} selected`;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-1 px-2 py-1 text-xs border border-white/20 rounded-lg bg-white text-black font-normal overflow-hidden"
+      >
+        <span className={`truncate ${selected.size === 0 ? "text-black/40" : "text-black"}`}>{summary}</span>
+        <span className="text-black/40 shrink-0">▾</span>
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 bg-white border border-black/10 rounded-lg shadow-lg z-30 min-w-32.5 max-h-60 overflow-auto">
+          {options.length === 0 && <div className="px-3 py-1.5 text-xs text-black/30">None</div>}
+          {options.map((opt) => (
+            <label key={opt.value} className="flex items-center gap-2 px-3 py-1.5 hover:bg-black/5 cursor-pointer select-none">
+              <input type="checkbox" checked={selected.has(opt.value)} onChange={() => toggle(opt.value)} className="rounded accent-black" />
+              <span className="text-xs text-black whitespace-nowrap">{opt.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export default function PaymentPreviewTable({
   results,
   selected,
@@ -39,6 +126,7 @@ export default function PaymentPreviewTable({
   onSelectAll,
   onPushSelected,
   onDismissRow,
+  onDismissRows,
   pushing,
   pushMsg,
   pushError,
@@ -51,20 +139,82 @@ export default function PaymentPreviewTable({
   revertError,
   onAddMissingMonths,
 }) {
-  const [filterStatus, setFilterStatus] = useState("all"); // "all" | "matched" | "error"
+  const [filterStatuses, setFilterStatuses] = useState(new Set());
+  const [filterSources,  setFilterSources]  = useState(new Set());
+  const [filterMonths,   setFilterMonths]   = useState(new Set());
+  const [filterMF,       setFilterMF]       = useState("");
+  const [filterName,     setFilterName]     = useState("");
+  const [sortCol,        setSortCol]        = useState(null);
+  const [sortDir,        setSortDir]        = useState("asc");
 
-  const visible  = results.filter((r) => !r.isDuplicate);
-  const matched  = visible.filter((r) => r.matchType === "matched");
-  const errors   = visible.filter((r) => r.matchType === "error");
-  const filtered = filterStatus === "matched" ? matched : filterStatus === "error" ? errors : visible;
+  function handleSort(col) {
+    if (sortCol === col) setSortDir((d) => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("asc"); }
+  }
 
-  const allSelected  = filtered.length > 0 && filtered.every((r) => selected.has(r.rowIndex));
-  const someSelected = filtered.some((r) => selected.has(r.rowIndex)) && !allSelected;
+  const visible = results.filter((r) => !r.isDuplicate);
+
+  // Filter option lists derived from the data
+  const sourceOptions = useMemo(
+    () => [...new Set(visible.map((r) => r.sheetName).filter(Boolean))].map((s) => ({ value: s, label: s })),
+    [visible]
+  );
+  const monthOptions = useMemo(
+    () => [...new Set(visible.map((r) => r.month).filter(Boolean))].map((m) => ({ value: m, label: m })),
+    [visible]
+  );
+
+  const filtered = useMemo(() => {
+    let rows = visible;
+    if (filterStatuses.size > 0) rows = rows.filter((r) => filterStatuses.has(r.matchType));
+    if (filterSources.size > 0)  rows = rows.filter((r) => filterSources.has(r.sheetName));
+    if (filterMonths.size > 0)   rows = rows.filter((r) => filterMonths.has(r.month));
+    if (filterMF)                rows = rows.filter((r) => (r.mfNumber ?? "").toLowerCase().includes(filterMF.toLowerCase()));
+    if (filterName)              rows = rows.filter((r) => (r.name ?? "").toLowerCase().includes(filterName.toLowerCase()));
+
+    if (sortCol) {
+      rows = [...rows].sort((a, b) => {
+        const get = (r) => {
+          if (sortCol === "status") return r.matchType ?? "";
+          if (sortCol === "source") return r.sheetName ?? "";
+          if (sortCol === "mf")     return r.mfNumber ?? "";
+          if (sortCol === "name")   return r.name ?? "";
+          if (sortCol === "date")   return r.date ? new Date(r.date).getTime() : 0;
+          if (sortCol === "month")  return r.month ?? "";
+          if (sortCol === "amount") return r.amount ?? 0;
+          return "";
+        };
+        const va = get(a), vb = get(b);
+        if (typeof va === "number") return sortDir === "asc" ? va - vb : vb - va;
+        return sortDir === "asc" ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+      });
+    } else {
+      // Default: source A→Z, then matched before error
+      rows = [...rows].sort((a, b) => {
+        const sa = a.sheetName ?? "", sb = b.sheetName ?? "";
+        if (sa !== sb) return sa.localeCompare(sb);
+        return (STATUS_PRIORITY[a.matchType] ?? 99) - (STATUS_PRIORITY[b.matchType] ?? 99);
+      });
+    }
+    return rows;
+  }, [visible, filterStatuses, filterSources, filterMonths, filterMF, filterName, sortCol, sortDir]);
+
+  const matched = visible.filter((r) => r.matchType === "matched");
+  const errors  = visible.filter((r) => r.matchType === "error");
+
+  const hasFilters = filterStatuses.size > 0 || filterSources.size > 0 || filterMonths.size > 0 || filterMF || filterName;
+
+  const filteredMatched = filtered.filter((r) => r.matchType === "matched");
+  const filteredErrors  = filtered.filter((r) => r.matchType === "error");
+
+  // Select-all targets the matched rows in view (errors aren't selectable)
+  const allSelected  = filteredMatched.length > 0 && filteredMatched.every((r) => selected.has(r.rowIndex));
+  const someSelected = filteredMatched.some((r) => selected.has(r.rowIndex)) && !allSelected;
   const selectedMatchedCount = [...selected].filter(
     (idx) => results.find((r) => r.rowIndex === idx)?.matchType === "matched"
   ).length;
 
-  // Date range banners — only for sheets that have a dateRange (fix 3)
+  // Date range banners — only for sheets that have a dateRange
   const dateRangeBanners = (formatSummary ?? []).filter((f) => f.dateRange);
 
   // Months that exist in error rows but have no column in the master sheet
@@ -75,12 +225,22 @@ export default function PaymentPreviewTable({
   )];
 
   function handleSelectAll() {
-    onSelectAll(filtered.map((r) => r.rowIndex), !allSelected);
+    onSelectAll(filteredMatched.map((r) => r.rowIndex), !allSelected);
+  }
+
+  function clearFilters() {
+    setFilterStatuses(new Set()); setFilterSources(new Set()); setFilterMonths(new Set());
+    setFilterMF(""); setFilterName("");
+  }
+
+  function dismissRows(rows) {
+    if (onDismissRows) onDismissRows(rows);
+    else rows.forEach((r) => onDismissRow(r));
   }
 
   return (
     <div className="flex flex-col h-full">
-      {/* Date range banners (fix 3) */}
+      {/* Date range banners */}
       {dateRangeBanners.length > 0 && (
         <div className="flex flex-wrap gap-2 px-4 pt-3 pb-1 shrink-0">
           {dateRangeBanners.map((f) => (
@@ -116,64 +276,64 @@ export default function PaymentPreviewTable({
       )}
 
       {/* Summary bar */}
-      <div className="flex flex-wrap items-center gap-3 px-4 py-2.5 border-b border-black/8 shrink-0">
-        <div className="flex items-center gap-2 text-sm">
-          <span className="font-semibold text-black">{visible.length} rows</span>
-          <span className="text-black/20">·</span>
-          <button
-            onClick={() => setFilterStatus(filterStatus === "matched" ? "all" : "matched")}
-            className={`font-semibold transition-colors ${filterStatus === "matched" ? "text-emerald-700 underline" : "text-emerald-700"}`}
-          >
-            {matched.length} matched
-          </button>
-          {errors.length > 0 && (
-            <>
-              <span className="text-black/20">·</span>
-              <button
-                onClick={() => setFilterStatus(filterStatus === "error" ? "all" : "error")}
-                className={`font-semibold transition-colors ${filterStatus === "error" ? "text-red-600 underline" : "text-red-600"}`}
-              >
-                {errors.length} error{errors.length !== 1 ? "s" : ""}
-              </button>
-            </>
-          )}
-          {duplicateCount > 0 && (
-            <>
-              <span className="text-black/20">·</span>
-              <span className="text-black/40">{duplicateCount} duplicate{duplicateCount !== 1 ? "s" : ""} skipped</span>
-            </>
-          )}
-          {filterStatus !== "all" && (
-            <button onClick={() => setFilterStatus("all")} className="text-xs text-black/40 underline">
-              Show all
-            </button>
-          )}
-        </div>
-
-        {/* Sheet badges */}
-        {(formatSummary ?? []).length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {formatSummary.map((f) => (
-              <span key={f.sheetName} className="text-xs text-black/40 border border-black/10 rounded-lg px-2 py-0.5">
-                {f.sheetName} ({f.count})
-              </span>
-            ))}
-          </div>
+      <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-black/8 shrink-0">
+        <span className="text-sm font-semibold text-black">{visible.length} rows</span>
+        <span className="text-black/20">·</span>
+        <span className="text-sm text-black"><span className="font-semibold text-emerald-700">{matched.length}</span> matched</span>
+        {errors.length > 0 && (
+          <span className="text-sm text-black"><span className="font-semibold text-red-600">{errors.length}</span> error{errors.length !== 1 ? "s" : ""}</span>
+        )}
+        {duplicateCount > 0 && (
+          <span className="text-sm text-black/40">{duplicateCount} duplicate{duplicateCount !== 1 ? "s" : ""} skipped</span>
+        )}
+        {hasFilters && (
+          <>
+            <span className="text-sm text-black/50">— {filtered.length} shown</span>
+            <button onClick={clearFilters} className="text-xs text-black underline">Clear</button>
+          </>
         )}
 
-        <div className="ml-auto flex items-center gap-2">
+        {/* Action buttons */}
+        <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
           {revertMsg && <span className="text-xs text-blue-600 font-medium">{revertMsg}</span>}
           {pushMsg   && <span className="text-xs text-emerald-700 font-medium">{pushMsg}</span>}
 
-          {/* Revert last push button */}
+          {/* Dismiss error rows */}
+          {filteredErrors.length > 0 && (
+            <button
+              onClick={() => dismissRows(filteredErrors)}
+              className="px-3 py-1.5 text-xs bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 shadow-sm hover:shadow transition-all border border-red-700"
+            >
+              Dismiss {filteredErrors.length} error{filteredErrors.length !== 1 ? "s" : ""}{hasFilters ? " (filtered)" : ""}
+            </button>
+          )}
+
+          {/* Push all matched in view */}
+          {filteredMatched.length > 0 && (
+            <button
+              onClick={() => onPushSelected(filteredMatched)}
+              disabled={pushing}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-40 shadow-sm hover:shadow transition-all border border-emerald-700"
+            >
+              {pushing && (
+                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              )}
+              {pushing ? "Pushing…" : `Push ${filteredMatched.length} matched${hasFilters ? " (filtered)" : ""}`}
+            </button>
+          )}
+
+          {/* Revert last push */}
           {canRevert && (
             <button
               onClick={onRevert}
               disabled={reverting}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm bg-white border border-black/20 rounded-xl text-black/70 font-medium hover:border-red-300 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white border border-black/20 rounded-lg text-black/70 font-medium hover:border-red-300 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 transition-all"
             >
               {reverting && (
-                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
@@ -182,20 +342,19 @@ export default function PaymentPreviewTable({
             </button>
           )}
 
+          <span className="text-sm text-black pl-1 border-l border-black/10">
+            <span className="font-semibold">{selectedMatchedCount}</span> selected
+          </span>
+
+          {/* Push selected */}
           <button
             onClick={() => {
               const rows = results.filter((r) => selected.has(r.rowIndex) && r.matchType === "matched");
               onPushSelected(rows);
             }}
             disabled={selectedMatchedCount === 0 || pushing}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-black text-white rounded-xl font-semibold hover:bg-black/80 disabled:opacity-30 transition-all"
+            className="flex items-center gap-2 px-4 py-1.5 text-xs bg-black text-white rounded-lg font-semibold hover:bg-black/80 disabled:opacity-30 transition-all"
           >
-            {pushing && (
-              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
-            )}
             {pushing ? "Pushing…" : `Push ${selectedMatchedCount} selected`}
           </button>
         </div>
@@ -231,45 +390,39 @@ export default function PaymentPreviewTable({
                   ref={(el) => { if (el) el.indeterminate = someSelected; }}
                   onChange={handleSelectAll}
                   className="rounded border-white/30 accent-white"
+                  title={allSelected ? "Deselect all" : "Select all matched"}
                 />
               </th>
-              <th className="px-4 py-2 w-24 text-left align-middle">
-                <span className="font-bold text-white uppercase tracking-wider text-xs">Status</span>
-              </th>
-              <th className="px-4 py-2 w-36 text-left align-middle">
-                <span className="font-bold text-white uppercase tracking-wider text-xs">Source</span>
-              </th>
-              <th className="px-4 py-2 w-28 text-left align-middle">
-                <span className="font-bold text-white uppercase tracking-wider text-xs">MF No.</span>
-              </th>
-              <th className="px-4 py-2 w-44 text-left align-middle">
-                <span className="font-bold text-white uppercase tracking-wider text-xs">Name</span>
-              </th>
-              <th className="px-4 py-2 w-32 text-left align-middle">
-                <span className="font-bold text-white uppercase tracking-wider text-xs">Date</span>
-              </th>
-              <th className="px-4 py-2 w-16 text-left align-middle">
-                <span className="font-bold text-white uppercase tracking-wider text-xs">Month</span>
-              </th>
-              <th className="px-4 py-2 w-24 text-left align-middle">
-                <span className="font-bold text-white uppercase tracking-wider text-xs">Amount</span>
-              </th>
-              <th className="px-4 py-2 w-36 text-left align-middle">
-                <span className="font-bold text-white uppercase tracking-wider text-xs">New Total</span>
-              </th>
-              <th className="px-4 py-2 text-left align-middle">
-                <span className="font-bold text-white uppercase tracking-wider text-xs">Issues</span>
-              </th>
-              <th className="px-3 py-2 w-16 text-left align-middle">
-                <span className="font-bold text-white uppercase tracking-wider text-xs">Actions</span>
-              </th>
+              <th className="px-4 py-2 w-24 text-left align-middle"><SortBtn col="status" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Status</SortBtn></th>
+              <th className="px-4 py-2 w-36 text-left align-middle"><SortBtn col="source" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Source</SortBtn></th>
+              <th className="px-4 py-2 w-28 text-left align-middle"><SortBtn col="mf"     sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>MF No.</SortBtn></th>
+              <th className="px-4 py-2 w-44 text-left align-middle"><SortBtn col="name"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Name</SortBtn></th>
+              <th className="px-4 py-2 w-28 text-left align-middle"><SortBtn col="date"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Date</SortBtn></th>
+              <th className="px-4 py-2 w-16 text-left align-middle"><SortBtn col="month"  sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Month</SortBtn></th>
+              <th className="px-4 py-2 w-24 text-left align-middle"><SortBtn col="amount" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Amount</SortBtn></th>
+              <th className="px-4 py-2 w-36 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">New Total</span></th>
+              <th className="px-4 py-2 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">Issues</span></th>
+              <th className="px-3 py-2 w-16 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">Actions</span></th>
+            </tr>
+            <tr className="border-b border-white/10">
+              <td className="px-4 pb-2"></td>
+              <td className="px-4 pb-2"><CheckboxFilter options={STATUS_OPTIONS} selected={filterStatuses} onChange={setFilterStatuses} placeholder="All" /></td>
+              <td className="px-4 pb-2"><CheckboxFilter options={sourceOptions} selected={filterSources} onChange={setFilterSources} placeholder="All sources" /></td>
+              <td className="px-4 pb-2"><FilterInput placeholder="Search…" value={filterMF} onChange={setFilterMF} /></td>
+              <td className="px-4 pb-2"><FilterInput placeholder="Search…" value={filterName} onChange={setFilterName} /></td>
+              <td className="px-4 pb-2"></td>
+              <td className="px-4 pb-2"><CheckboxFilter options={monthOptions} selected={filterMonths} onChange={setFilterMonths} placeholder="All" /></td>
+              <td className="px-4 pb-2"></td>
+              <td className="px-4 pb-2"></td>
+              <td className="px-4 pb-2"></td>
+              <td className="px-3 pb-2"></td>
             </tr>
           </thead>
           <tbody className="divide-y divide-black/5">
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={11} className="px-4 py-12 text-center text-sm text-black/30">
-                  No rows to show
+                  {hasFilters ? "No rows match your filters" : "No rows to show"}
                 </td>
               </tr>
             )}
@@ -340,15 +493,31 @@ export default function PaymentPreviewTable({
                     )}
                   </td>
                   <td className="px-3 py-3">
-                    <button
-                      onClick={() => onDismissRow(result)}
-                      title="Dismiss this row"
-                      className="p-1.5 rounded-lg border border-black/10 text-black/30 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {/* Push this row */}
+                      {result.matchType === "matched" && (
+                        <button
+                          onClick={() => onPushSelected([result])}
+                          disabled={pushing}
+                          title="Push this payment to master sheet"
+                          className="p-1.5 rounded-lg border border-emerald-200 text-emerald-600 hover:bg-emerald-50 disabled:opacity-30 transition-all"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                          </svg>
+                        </button>
+                      )}
+                      {/* Dismiss this row */}
+                      <button
+                        onClick={() => onDismissRow(result)}
+                        title="Dismiss this row"
+                        className="p-1.5 rounded-lg border border-black/10 text-black/30 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );

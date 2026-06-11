@@ -45,16 +45,22 @@ Closing the browser mid-session is safe — the in-progress file is saved to a G
 
 ## Session Persistence
 
-When a file is uploaded and parsed, the raw rows are saved to a Google Sheets queue tab:
+When a file is uploaded and parsed, the rows are saved to a Google Sheets queue tab:
 
-| Workflow | Queue tab | Log tab |
-|----------|-----------|---------|
-| Pledges | `_pledge_queue_` | `_pledge_log_` |
-| Payments | `_payment_queue_` | `_payment_log_` |
+| Workflow | Queue tab | Overrides tab | Log tab |
+|----------|-----------|---------------|---------|
+| Pledges | `_pledge_queue_` | `_pledge_overrides_` | `_pledge_log_` |
+| Payments | `_payment_queue_` | — | `_payment_log_` |
 
 On page load, the app checks for a pending queue tab first. If one exists, it auto-resumes directly into the review preview (re-fetching master sheet data and re-running matching so already-pushed rows are filtered out). No manual "resume" step required.
 
-The queue tab is deleted when all rows in the session are pushed, or when "Discard file" is confirmed.
+What persists across a browser close (until pushed or discarded):
+
+- **Uploaded rows** — the queue tab. Adding another file (Add file / Add new CSV) rewrites the queue with the merged set.
+- **Dismissed rows** — removed from the queue, so they do not reappear on resume.
+- **Pledge field decisions** — regional-response decisions and manual Current/New picks are saved to `_pledge_overrides_`, keyed by Ticket ID, and re-applied on resume (re-mapped to that run's rows).
+
+The queue (and overrides) tab is deleted when all rows in the session are pushed, or when "Discard file" is confirmed. The in-memory **revert** snapshot is the exception — it is lost on close (the Sheets write stands; the log entry remains).
 
 ---
 
@@ -184,24 +190,30 @@ Payment fingerprints (`date|mfNumber|amount|reference`) already present in `_pay
 
 | Button | When visible | Action |
 |--------|-------------|--------|
-| **Add new CSV** | Pledge, always | Merge rows from another Pabbly export |
-| **Undo last add** | Pledge, after Add new CSV | Revert the last merge — restores pre-merge queue state |
-| **Upload region response** | Pledge, always | Import filled Excel → apply decisions to Review rows |
+| **Add new CSV** (pledge) / **Add file** (payment) | Always | Merge rows from another export into the session. Duplicates (Ticket ID for pledge, fingerprint for payment) are skipped |
+| **Undo last add** | After an Add | Revert the last merge — restores pre-merge queue state |
+| **Upload region response** | Pledge, always | Import filled Excel → apply decisions to Review rows (persisted to `_pledge_overrides_`) |
 | **Discard file** | Always | Confirm prompt → delete queue tab, clear session, return to history or upload |
 | **Revert last push** | After any push | Undo the last Google Sheets write — restores master cells and returns rows to preview |
-| **Update X selected** | Pledge | Push all checked rows |
-| **Push X selected** | Payment | Push all checked matched rows |
+| **View Pledge / Payment History** | In preview header | Go to the append-only log view (reloads from the log tab) |
+| **Update X selected** (pledge) / **Push X selected** (payment) | Always | Push all checked rows |
+| **Push X matched** | Payment | Push every matched row currently in view (respects filters) |
 
-### In-table actions (pledge only)
+### Sorting & filtering (both previews)
 
-| Button | Action |
-|--------|--------|
-| ↑ (per row) | Push single row |
-| ✕ (per row) | Dismiss row from preview |
-| **Dismiss X errors** | Mark all error rows dismissed |
-| **Export review report** | Open region picker → download Excel |
-| **Add X new** | Push all clean New rows |
-| **Update X clean** | Push all clean Update rows |
+Each column header (Status, Source*, MF No., Name, Date*, Month*, Amount*) is click-to-sort. A filter row sits under the headers: dropdowns for Status / Region* / Source* / Month*, text search for MF No. / Name / Email*. Batch actions ("Dismiss X errors", "Push X matched", "Update X clean") act on the **filtered** view and are labelled "(filtered)" when a filter is active.
+<br>*payment-specific or pledge-specific columns differ; see each table.*
+
+### In-table actions
+
+| Button | Workflow | Action |
+|--------|----------|--------|
+| ↑ (per row) | Both | Push single row |
+| ✕ (per row) | Both | Dismiss row — removed from preview **and** the queue tab |
+| **Dismiss X errors** | Both | Dismiss all error rows in view (removed from queue) |
+| **Export review report** | Pledge | Open region picker → download Excel |
+| **Add X new** | Pledge | Push all clean New rows |
+| **Update X clean** | Pledge | Push all clean Update rows |
 
 ---
 
@@ -269,6 +281,68 @@ Format: **`MF` + exactly 3 digits + 1 uppercase letter** (e.g. `MF123A`).
 | `NO_MONTH_COL` | Error | Monthly column for this transaction's date does not exist in master |
 
 Warnings block auto-selection but do not prevent manual push. Errors block auto-selection; the push button is still available for the admin to override.
+
+---
+
+## Architecture & Code Map
+
+Next.js App Router. Parsing and matching happen in the browser; every Google Sheets read/write goes through a server-side API route using the service account. The client never holds Google credentials.
+
+```
+Browser (client components)                Server (Node runtime)            Google
+──────────────────────────                 ─────────────────────            ──────
+app/page.js          connect sheet
+app/pledge/page.js ──┐ parse + match        app/api/pledge    ┐
+app/payment/page.js ─┤ (lib/*)        fetch app/api/payment   ├─ lib/googleSheets ─→ Sheets API v4
+                     └───────────────────→  app/api/sheet     │   (service account)
+                        JSON over fetch      app/api/queue     │
+                                             app/api/*/revert  ┘
+proxy.js  ── guards every request via mfp_session cookie ──────────────────────────
+```
+
+### Client libraries (`lib/`)
+
+| File | Role |
+|------|------|
+| `parseFile.js` | Parse Pabbly CSV/XLSX → raw rows (pledge) |
+| `parsePaymentFile.js` | Detect bank format per tab, parse → transactions (payment) |
+| `matchRows.js` | Match pledge rows to master; classify Update/Review/New/Error |
+| `matchPayments.js` | Match transactions to master row + month column |
+| `mapFields.js`, `calcPledge.js`, `validateRows.js` | Field mapping, pledge-amount stacking, validation |
+| `exportReviewReport.js` | Build the regional Review Excel (with Decision dropdown) |
+| `parseReviewResponse.js` | Read a filled-in Review Excel back in |
+
+### Server library
+
+`lib/googleSheets.js` is the only module that talks to Google. Key functions: `fetchMasterSheet`, `addMonthColumns`, `read/write/deleteQueueTab`, `pushPledgeToMaster` / `revertPledgeUpdates`, `pushPaymentUpdates` / `revertPaymentUpdates`, `append*Log` / `read*Log` / `mark*Reverted`.
+
+### Components
+
+`PreviewTable.js` (pledge), `PaymentPreviewTable.js` (payment), `DropZone.js`, `ErrorBadge.js`.
+
+---
+
+## API Reference
+
+All routes run on the Node runtime and require the `mfp_session` cookie (except `/api/auth`).
+
+| Route | Method | Body / Query | Returns |
+|-------|--------|--------------|---------|
+| `/api/auth` | POST | `{ password }` | Sets `mfp_session` cookie |
+| `/api/auth` | DELETE | — | Clears the cookie |
+| `/api/sheet` | GET | `?sheetId&tab` | `{ headers, rows, title }` |
+| `/api/sheet` | POST | `{ sheetId, tab, addMonths[] }` | `{ added[] }` (new month columns) |
+| `/api/queue` | GET | `?sheetId&queueTab` | `{ rows }` (or `{ tabs }` if no `queueTab`) |
+| `/api/queue` | POST | `{ sheetId, queueTab, rows }` | `{ ok }` — overwrites the tab |
+| `/api/queue` | DELETE | `{ sheetId, queueTab }` | `{ ok }` |
+| `/api/pledge` | GET | `?sheetId` | `{ fingerprints, rows }` from `_pledge_log_` |
+| `/api/pledge` | POST | `{ sheetId, tab, updates, appends, logRows }` | `{ updated, appended, snapshot }` |
+| `/api/pledge/revert` | POST | `{ sheetId, snapshot, fingerprints }` | `{ ok }` |
+| `/api/payment` | GET | `?sheetId` | `{ fingerprints, rows }` from `_payment_log_` |
+| `/api/payment` | POST | `{ sheetId, tab, updates, logRows }` | `{ pushed, snapshot }` |
+| `/api/payment/revert` | POST | `{ sheetId, tab, cells, fingerprints }` | `{ reverted }` |
+
+The push `snapshot` returned by each POST is what the matching `/revert` route consumes to restore the master and mark log rows `reverted`.
 
 ---
 

@@ -8,8 +8,9 @@ import { matchRows } from "@/lib/matchRows";
 import { parseReviewResponse } from "@/lib/parseReviewResponse";
 import { MASTER_COLS, PABBLY_COLS } from "@/config/columns";
 
-const SESSION_KEY      = "mfp_sheet_config";
-const PLEDGE_QUEUE_TAB = "_pledge_queue_";
+const SESSION_KEY          = "mfp_sheet_config";
+const PLEDGE_QUEUE_TAB     = "_pledge_queue_";
+const PLEDGE_OVERRIDES_TAB = "_pledge_overrides_";
 const PHASES = { LOADING: "loading", LOG: "log", UPLOAD: "upload", PREVIEW: "preview" };
 
 function getConfig() {
@@ -182,10 +183,82 @@ export default function PledgePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sheetId: sid, queueTab: PLEDGE_QUEUE_TAB }),
     }).catch(() => {});
+    deleteOverridesBg(sid);
   }
 
-  // Core resume logic — called on auto-resume (init) and after new file upload
-  async function resumeFromRows(rawRows, sid, tab) {
+  // ── Field-override persistence (regional response decisions, manual picks) ─────
+  // Saved keyed by ticketId so they survive row reordering / dismissals on resume.
+
+  function serializeOverrides(resultsList, overridesByIndex) {
+    const idxToTicket = {};
+    resultsList.forEach((r) => { idxToTicket[r.pabblyIndex] = r.ticketId; });
+    const rows = [["ticketId", "colIndex", "choice"]];
+    Object.entries(overridesByIndex).forEach(([idxStr, cols]) => {
+      const ticketId = idxToTicket[idxStr];
+      if (!ticketId) return;
+      Object.entries(cols ?? {}).forEach(([col, choice]) => {
+        rows.push([String(ticketId), String(col), String(choice)]);
+      });
+    });
+    return rows;
+  }
+
+  function persistOverridesBg(resultsList, overridesByIndex) {
+    const { sheetId: sid } = getConfig();
+    if (!sid) return;
+    const rows = serializeOverrides(resultsList, overridesByIndex);
+    if (rows.length < 2) { deleteOverridesBg(sid); return; }
+    fetch("/api/queue", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sheetId: sid, queueTab: PLEDGE_OVERRIDES_TAB, rows }),
+    }).catch(() => {});
+  }
+
+  function deleteOverridesBg(sid) {
+    fetch("/api/queue", {
+      method:  "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sheetId: sid, queueTab: PLEDGE_OVERRIDES_TAB }),
+    }).catch(() => {});
+  }
+
+  // Apply field overrides ({pabblyIndex: {colIndex: choice}}) to result rows:
+  // patch outputRow, clear resolved warnings, and promote review→update when clean.
+  function applyOverridesToResults(resultsList, overridesByIndex) {
+    return resultsList.map((result) => {
+      const rowOverrides = overridesByIndex[result.pabblyIndex];
+      if (!rowOverrides || Object.keys(rowOverrides).length === 0) return result;
+
+      const newOutputRow = [...result.outputRow];
+      const resolvedCols = new Set();
+      Object.entries(rowOverrides).forEach(([colStr, choice]) => {
+        const col = parseInt(colStr);
+        if (Number.isNaN(col)) return;
+        resolvedCols.add(col);
+        if (choice === "master" && result.masterRow?.[col] !== undefined) newOutputRow[col] = result.masterRow[col];
+        else if (choice !== "pabbly" && choice !== "master")             newOutputRow[col] = choice;
+        // "pabbly" → keep outputRow value as-is
+      });
+
+      // Only review rows recompute their status; new/error rows keep theirs.
+      if (result.matchType !== "review") return { ...result, outputRow: newOutputRow };
+
+      const remainingErrors = result.errors.filter((e) => {
+        if (e.severity !== "warning") return true;
+        const col = MISMATCH_COL_MAP[e.code];
+        return col === undefined || !resolvedCols.has(col);
+      });
+      const hasWarnings  = remainingErrors.some((e) => e.severity === "warning");
+      const hasErrors    = remainingErrors.some((e) => e.severity === "error");
+      const newMatchType = hasErrors || hasWarnings ? "review" : "update";
+      return { ...result, outputRow: newOutputRow, errors: remainingErrors, matchType: newMatchType, hasErrors };
+    });
+  }
+
+  // Core resume logic — called on auto-resume (init) and after new file upload.
+  // loadOverrides=false for a brand-new file (no carried-over decisions).
+  async function resumeFromRows(rawRows, sid, tab, loadOverrides = true) {
     setStatusMsg("Loading session…");
     setPhase(PHASES.PREVIEW);
     try {
@@ -200,8 +273,34 @@ export default function PledgePage() {
       const matched         = matchRows(rawRows, sheetData.rows, sheetData.headers);
       const alreadyPushed   = new Set(processedFingerprints);
       const filtered        = matched.filter((r) => !alreadyPushed.has(r.ticketId));
+
+      // Restore any saved field overrides (regional response decisions, manual picks),
+      // re-keyed from ticketId back to this run's pabblyIndex.
+      let restoredOverrides = {};
+      if (loadOverrides) {
+        try {
+          const ovRes  = await fetch(`/api/queue?sheetId=${encodeURIComponent(sid)}&queueTab=${encodeURIComponent(PLEDGE_OVERRIDES_TAB)}`);
+          const ovData = await ovRes.json();
+          if (ovRes.ok && ovData.rows && ovData.rows.length >= 2) {
+            const ticketToIdx = {};
+            filtered.forEach((r) => { if (r.ticketId) ticketToIdx[r.ticketId] = r.pabblyIndex; });
+            ovData.rows.slice(1).forEach(([ticketId, colStr, choice]) => {
+              const idx = ticketToIdx[(ticketId ?? "").toString().trim()];
+              if (idx === undefined) return;
+              const col = parseInt(colStr);
+              if (Number.isNaN(col)) return;
+              (restoredOverrides[idx] ??= {})[col] = choice;
+            });
+          }
+        } catch { /* overrides are best-effort */ }
+      }
+
+      const withOverrides = Object.keys(restoredOverrides).length > 0
+        ? applyOverridesToResults(filtered, restoredOverrides)
+        : filtered;
+
       const initialSelected = new Set(
-        filtered
+        withOverrides
           .filter((r) => r.matchType === "update" ||
             (r.matchType === "new" && !r.hasErrors && !r.errors.some((e) => e.severity === "warning")))
           .map((r) => r.pabblyIndex)
@@ -210,10 +309,11 @@ export default function PledgePage() {
       setIsResumedSession(true);
       setRawPabblyRows(rawRows);
       rawPabblyRowsRef.current  = rawRows;
-      setResults(filtered);
+      setResults(withOverrides);
+      resultsRef.current = withOverrides;
       setSelected(initialSelected);
-      setFieldOverrides({});
-      fieldOverridesRef.current = {};
+      setFieldOverrides(restoredOverrides);
+      fieldOverridesRef.current = restoredOverrides;
       setStatusMsg("");
     } catch (err) {
       setStatusMsg(`Error loading session: ${err.message}`);
@@ -257,12 +357,14 @@ export default function PledgePage() {
       return;
     }
 
-    // Save to queue tab for session persistence, then resume into preview
+    // Save to queue tab for session persistence, then resume into preview.
+    // A brand-new file starts with no carried-over decisions.
     setIsResumedSession(false);
     setAddMoreSnapshot(null);
+    deleteOverridesBg(sid);
     saveQueueBg(sid, newPabblyRawRows);
     setQueueRawRows(newPabblyRawRows);
-    await resumeFromRows(newPabblyRawRows, sid, tab);
+    await resumeFromRows(newPabblyRawRows, sid, tab, false);
   }
 
   async function handleAddMoreRows(file) {
@@ -503,6 +605,22 @@ export default function PledgePage() {
 
   async function handleRemoveRows(rows) {
     removeRows(rows);
+
+    // Remove dismissed rows from the saved queue so they don't reappear on resume.
+    const { sheetId: sid } = getConfig();
+    const dismissedIds = new Set(rows.map((r) => r.ticketId).filter(Boolean));
+    if (dismissedIds.size === 0 || !sid) return;
+
+    const current = rawPabblyRowsRef.current;
+    if (!current || current.length < 2) return;
+
+    const updated = current.filter((row, i) =>
+      i === 0 || !dismissedIds.has((row[PABBLY_COLS.TICKET_ID] ?? "").toString().trim())
+    );
+    rawPabblyRowsRef.current = updated;
+    setRawPabblyRows(updated);
+    setQueueRawRows(updated);
+    saveQueueBg(sid, updated);
   }
 
   // ── Revert ────────────────────────────────────────────────────────────────────
@@ -546,8 +664,12 @@ export default function PledgePage() {
   function handleFieldOverride(pabblyIndex, colIndex, choice) {
     const current   = fieldOverridesRef.current[pabblyIndex] ?? {};
     const newForRow = { ...current, [colIndex]: choice };
-    fieldOverridesRef.current = { ...fieldOverridesRef.current, [pabblyIndex]: newForRow };
-    setFieldOverrides(fieldOverridesRef.current);
+    const newOverrides = { ...fieldOverridesRef.current, [pabblyIndex]: newForRow };
+    fieldOverridesRef.current = newOverrides;
+    setFieldOverrides(newOverrides);
+
+    // Persist so manual picks survive closing/reopening before push.
+    persistOverridesBg(resultsRef.current, newOverrides);
   }
 
   function toggleRow(pabblyIndex) {
@@ -583,44 +705,31 @@ export default function PledgePage() {
       byKey[key][field] = decision;
     });
 
-    const newResults        = [];
+    // Merge the response decisions into the override map (keyed by pabblyIndex).
     const newFieldOverrides = { ...fieldOverridesRef.current };
-
     resultsRef.current.forEach((result) => {
-      if (result.matchType !== "review") { newResults.push(result); return; }
+      if (result.matchType !== "review") return;
       const mf          = (result.outputRow[MASTER_COLS.MF_NUMBER] ?? "").trim().toUpperCase();
       const mfDecisions = byKey[mf];
-      if (!mfDecisions) { newResults.push(result); return; }
-
-      const newOutputRow  = [...result.outputRow];
-      const resolvedCols  = new Set();
-      const rowOverrides  = { ...(fieldOverridesRef.current[result.pabblyIndex] ?? {}) };
-
+      if (!mfDecisions) return;
+      const rowOverrides = { ...(newFieldOverrides[result.pabblyIndex] ?? {}) };
       Object.entries(mfDecisions).forEach(([field, choice]) => {
         const col = FIELD_TO_COL[field];
         if (col === undefined) return;
-        resolvedCols.add(col);
         rowOverrides[col] = choice;
-        if (choice === "master" && result.masterRow?.[col] !== undefined) newOutputRow[col] = result.masterRow[col];
       });
-
-      const remainingErrors = result.errors.filter((e) => {
-        if (e.severity !== "warning") return true;
-        const col = MISMATCH_COL_MAP[e.code];
-        return col === undefined || !resolvedCols.has(col);
-      });
-
-      const hasWarnings  = remainingErrors.some((e) => e.severity === "warning");
-      const hasErrors    = remainingErrors.some((e) => e.severity === "error");
-      const newMatchType = hasErrors || hasWarnings ? "review" : "update";
-
       newFieldOverrides[result.pabblyIndex] = rowOverrides;
-      newResults.push({ ...result, outputRow: newOutputRow, errors: remainingErrors, matchType: newMatchType, hasErrors });
     });
+
+    const newResults = applyOverridesToResults(resultsRef.current, newFieldOverrides);
 
     fieldOverridesRef.current = newFieldOverrides;
     setResults(newResults);
+    resultsRef.current = newResults;
     setFieldOverrides(newFieldOverrides);
+
+    // Persist so the decisions survive closing/reopening before push.
+    persistOverridesBg(newResults, newFieldOverrides);
   }
 
   // ── Navigation ────────────────────────────────────────────────────────────────
@@ -671,7 +780,7 @@ export default function PledgePage() {
               onClick={resetToLog}
               className="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg font-medium border border-white/10 transition-all"
             >
-              Back to history
+              View Pledge History
             </button>
           )}
         </div>
