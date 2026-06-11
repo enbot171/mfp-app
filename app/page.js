@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 const SESSION_KEY = "mfp_sheet_config";
+const SERVICE_ACCOUNT_EMAIL = "mfp-app-service@mfp-app-498015.iam.gserviceaccount.com";
 
 function extractSheetId(value) {
   const match = value.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
@@ -23,8 +24,17 @@ export default function HomePage() {
   const [sheetTitle,   setSheetTitle]   = useState("");
   const [connectError, setConnectError] = useState(null);
   const [connecting,   setConnecting]   = useState(false);
+  const [copied,       setCopied]       = useState(false);
 
   const router = useRouter();
+
+  async function copyEmail() {
+    try {
+      await navigator.clipboard.writeText(SERVICE_ACCOUNT_EMAIL);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard unavailable — user can still select the text */ }
+  }
 
   useEffect(() => {
     const { sheetId: sid, tabName: tab, sheetTitle: title } = getConfig();
@@ -87,12 +97,38 @@ export default function HomePage() {
             <p className="text-xs text-white/40">Pledge &amp; Payment Processor</p>
           </div>
         </div>
-        <button
-          onClick={handleSignOut}
-          className="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg font-medium border border-white/10 hover:border-white/20 transition-all"
-        >
-          Sign out
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Service account — share the master sheet with this email */}
+          <button
+            onClick={copyEmail}
+            title="Share your Google Sheet with this service account (Editor), then copy it here"
+            className="hidden sm:flex items-center gap-2 text-xs bg-white/5 hover:bg-white/10 text-white/70 hover:text-white px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/20 transition-all max-w-88"
+          >
+            <svg className="w-3.5 h-3.5 shrink-0 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.206" />
+            </svg>
+            <span className="font-mono truncate">{SERVICE_ACCOUNT_EMAIL}</span>
+            <span className="shrink-0 text-white/40">
+              {copied ? (
+                <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              )}
+            </span>
+          </button>
+          <button
+            onClick={handleSignOut}
+            className="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg font-medium border border-white/10 hover:border-white/20 transition-all"
+          >
+            Sign out
+          </button>
+        </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-10">
@@ -100,10 +136,55 @@ export default function HomePage() {
         {/* ── SHEET CONFIG ── */}
         {phase === "sheet_config" && (
           <div className="max-w-md mx-auto">
-            <div className="mb-8">
+            <div className="mb-6">
               <h2 className="text-2xl font-bold text-black tracking-tight">Connect your sheet</h2>
               <p className="text-sm text-black/50 mt-1">Paste in the Google Sheet ID and the tab name to get started.</p>
             </div>
+
+            {/* Share-access reminder — the service account needs Editor access first */}
+            <div className="mb-6 bg-blue-50 border border-blue-100 rounded-2xl p-5">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-blue-900">First, share your sheet with the app</p>
+                  <p className="text-xs text-blue-800/70 mt-1 leading-relaxed">
+                    In Google Sheets, click <span className="font-semibold">Share</span> and give this service account{" "}
+                    <span className="font-semibold">Editor</span>{" "}
+                    access. Without it, the app can&apos;t read or update your sheet.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={copyEmail}
+                    className="mt-3 w-full flex items-center justify-between gap-2 bg-white border border-blue-200 rounded-xl px-3 py-2 text-left hover:border-blue-300 transition-all group"
+                  >
+                    <span className="font-mono text-xs text-blue-900 truncate">{SERVICE_ACCOUNT_EMAIL}</span>
+                    <span className={`shrink-0 flex items-center gap-1 text-xs font-semibold ${copied ? "text-emerald-600" : "text-blue-600"}`}>
+                      {copied ? (
+                        <>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                          </svg>
+                          Copied
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                          Copy
+                        </>
+                      )}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div className="bg-white rounded-2xl border border-black/8 shadow-sm p-8">
               <form onSubmit={handleConnect} className="space-y-5">
                 <div>
