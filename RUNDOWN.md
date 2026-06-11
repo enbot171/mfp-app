@@ -163,24 +163,61 @@ Ticket IDs already present in `_pledge_log_` are filtered out on file upload and
 
 ### Supported bank formats
 
-| Format ID | Bank | Account type |
-|-----------|------|--------------|
-| `format1` | Generic | — |
-| `uob_pn` | UOB | Personal |
-| `uob_bo` | UOB | Business |
-| `dbs_pn` | DBS | Personal |
-| `dbs_bo` | DBS | Business |
-| `bank5` | — | — |
+| Format ID | Label | Bank / type |
+|-----------|-------|-------------|
+| `format1` | GIRO / Funds Transfer | Generic GIRO collection |
+| `uob_pn` | UOB PayNow | UOB PayNow |
+| `uob_bo` | UOB Bank Online | UOB bulk/online |
+| `dbs_pn` | DBS PayNow | DBS PayNow (GEN PN, BFC, MFP) |
+| `dbs_bo` | DBS Bank Online | DBS bulk/online |
+| `bank5` | Bank Transactions (PayNow) | Generic PayNow inward |
 
-The parser detects the format automatically from the sheet header structure. Multi-sheet XLSX files are supported — each sheet is parsed independently.
+A multi-tab XLSX is supported — **each tab is detected and parsed independently**, then all transactions are pooled into one preview. The `Source` column / filter shows which tab each row came from.
+
+### Tab detection logic (on upload)
+
+For every tab, `parsePaymentFile` (`lib/parsePaymentFile.js → detectFormat`) inspects the first two rows and applies these rules **in order — first match wins**:
+
+| # | Condition (row 0 = `r0`, row 1 = `r1`) | Format |
+|---|----------------------------------------|--------|
+| 0 | Tab name is `master` / `pabbly`, starts with `_`, or has < 2 rows | **skipped** |
+| 1 | `r0` contains **all of** "Account Number", "Remarks", "Deposit" | `format1` |
+| 2 | any cell in `r1` starts with "Transaction Description" | `dbs_pn` |
+| 3 | `r1[0] === "D1"` | `uob_pn` |
+| 4 | `r1[2] === "Inward PayNow"` | `bank5` |
+| 5 | `r1[3]` is an 8-digit `YYYYMMDD` integer (> 20000000) | `dbs_bo` |
+| 6 | `r1[0]` starts with `MF` | `uob_bo` |
+| — | none of the above | **skipped** (not a transaction sheet) |
+
+Order matters: `dbs_bo` is checked before `uob_bo` because both put the MF in column 0 — the 8-digit date in column 3 is what distinguishes DBS. A tab that matches nothing is silently ignored (so a master/notes tab in the same workbook causes no error).
+
+> `format1` uses a real header in row 0, so it has **no** statement date-range banner. Every other format has a date range in row 0 (e.g. `"19 May - 25 May"`), which becomes the amber calendar banner at the top of the preview.
+
+### Where each format reads its data
+
+| Format | Header / data start | MF source (extraction mode) | Amount | Date |
+|--------|---------------------|------------------------------|--------|------|
+| `format1` | header row 0, data row 1+ | Remarks col 6 (direct) | Deposit col 7 | col 2 (Excel serial) |
+| `uob_pn` | date row 0, `D1` header row 1, `D2` rows 2+ | Remarks col 10 (free-text) | col 17 | col 3 (serial) |
+| `uob_bo` | date row 0, data row 1+ | col 0 (direct) | col 2 | col 5 (serial) |
+| `dbs_pn` | date row 0, header row 1, data row 2+ | Transaction Description 2, col 3 (free-text) | Credit col 5 | col 0 (serial) |
+| `dbs_bo` | date row 0, data row 1+ | col 0 (direct) | col 2 | col 3 (`YYYYMMDD`) |
+| `bank5` | date row 0, data row 1+ | Description col 3 (free-text) | Credit col 5 | col 0 (serial) |
+
+**MF extraction has two modes:**
+
+- **Direct** (`normaliseMFFromRaw`) — for columns that *are* the MF number: strips a leading `MFP `, prepends `MF` if missing, uppercases. `"MF"` with no digits is rejected.
+- **Free-text** (`extractMFFromText`) — for messy description fields: finds, in priority, `MF<digits><letter>` → `MFP <digits><letter>` (auto-corrected) → a bare partial NRIC `<3-4 digits><letter>` (auto-corrected). Long account numbers (no word-boundary letter) are **not** matched, avoiding false positives.
+
+Empty rows (zero amount and no MF) are dropped.
 
 ### Matching Logic
 
-Each parsed bank transaction is matched to a master row by MF number (extracted from the reference/description field) or by amount. The matched cell is the monthly column (`MAR`, `APR`, etc.) corresponding to the transaction date. If the column does not yet exist, an **Add missing months** prompt appears.
+Each parsed transaction is matched to a master row by **MF number**, with a **partial-NRIC fallback** (strip the `MF` prefix, look up by NRIC) when the MF isn't found. The target cell is the **monthly column** (`MAR`, `APR`, …) for the transaction's date. Pushing **adds** the amount to whatever is already in that cell (multiple transactions to the same person/month accumulate), and colours it green (≥ pledge) or yellow (partial). If the month column doesn't exist, an **Add missing months** prompt appears (`POST /api/sheet`).
 
 ### Deduplication
 
-Payment fingerprints (`date|mfNumber|amount|reference`) already present in `_payment_log_` are filtered out on file upload and on resume.
+Payment fingerprints (`date|mfNumber|amount|rawReference`) already present in `_payment_log_` (status `pushed`) are filtered out on upload and on resume. Within a single upload, an **Add file** merge also drops transactions whose fingerprint already appears in the current preview.
 
 ---
 
