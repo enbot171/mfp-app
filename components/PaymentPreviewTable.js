@@ -14,6 +14,23 @@ const STATUS_OPTIONS = [
   { value: "error",   label: "Error" },
 ];
 
+// Inline input that holds its own text and commits on blur / Enter (so the page
+// only re-matches + saves once per edit, not on every keystroke).
+function CommitInput({ value, onCommit, mono = false, align = "left" }) {
+  const [text, setText] = useState(String(value ?? ""));
+  useEffect(() => { setText(String(value ?? "")); }, [value]);
+  return (
+    <input
+      type="text"
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => { if (text !== String(value ?? "")) onCommit(text); }}
+      onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+      className={`w-full bg-transparent border border-transparent hover:border-black/15 focus:border-black/40 focus:bg-white rounded-md px-1.5 py-1 text-xs text-black outline-none transition-all ${mono ? "font-mono" : ""} ${align === "right" ? "text-right" : ""}`}
+    />
+  );
+}
+
 function formatDate(date) {
   if (!date) return "—";
   return new Date(date).toLocaleDateString("en-SG", {
@@ -127,6 +144,7 @@ export default function PaymentPreviewTable({
   onPushSelected,
   onDismissRow,
   onDismissRows,
+  onEditRow,
   pushing,
   pushMsg,
   pushError,
@@ -465,10 +483,19 @@ export default function PaymentPreviewTable({
                     {formatDate(result.date)}
                   </td>
                   <td className="px-4 py-3 font-mono font-semibold text-black">
-                    {result.month || <span className="text-black/30">—</span>}
+                    <CommitInput
+                      mono
+                      value={result.month ?? ""}
+                      onCommit={(v) => onEditRow(result.rowIndex, { month: v.trim().toUpperCase() })}
+                    />
                   </td>
                   <td className="px-4 py-3 font-mono text-black">
-                    {result.amount.toFixed(2)}
+                    <CommitInput
+                      mono
+                      align="right"
+                      value={Number(result.amount).toFixed(2)}
+                      onCommit={(v) => onEditRow(result.rowIndex, { amount: parseFloat(v) || 0 })}
+                    />
                   </td>
                   <td className="px-4 py-3">
                     {result.matchType === "matched" ? (

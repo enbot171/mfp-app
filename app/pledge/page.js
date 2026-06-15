@@ -115,6 +115,7 @@ export default function PledgePage() {
   const resultsRef        = useRef(results);
   const rawPabblyRowsRef  = useRef(rawPabblyRows);
   const fieldOverridesRef = useRef(fieldOverrides);
+  const persistTimerRef   = useRef(null);
   useEffect(() => { resultsRef.current        = results;       }, [results]);
   useEffect(() => { rawPabblyRowsRef.current  = rawPabblyRows; }, [rawPabblyRows]);
   useEffect(() => { fieldOverridesRef.current = fieldOverrides; }, [fieldOverrides]);
@@ -379,14 +380,29 @@ export default function PledgePage() {
       return;
     }
 
+    const normMF = (raw) => {
+      const s = (raw ?? "").trim().toUpperCase();
+      if (!s) return "";
+      return s.startsWith("MF") ? s : `MF${s}`;
+    };
+
     const allRows = rawPabblyRowsRef.current;
     const knownTicketIds = new Set(
       allRows.slice(1).map((row) => (row[PABBLY_COLS.TICKET_ID] ?? "").trim()).filter(Boolean)
     );
+    const knownMFs = new Set(
+      allRows.slice(1).map((row) => normMF(row[PABBLY_COLS.MF_NUMBER])).filter(Boolean)
+    );
 
+    // A row is a duplicate if its Ticket ID is already present, OR its MF No. is
+    // already in the session and it isn't an "additional pledge" for that person.
     const genuinelyNew  = newRows.slice(1).filter((row) => {
       const tid = (row[PABBLY_COLS.TICKET_ID] ?? "").trim();
-      return tid && !knownTicketIds.has(tid);
+      if (tid && knownTicketIds.has(tid)) return false;
+      const mf           = normMF(row[PABBLY_COLS.MF_NUMBER]);
+      const isAdditional = (row[PABBLY_COLS.ADDITIONAL] ?? "").trim() !== "";
+      if (mf && knownMFs.has(mf) && !isAdditional) return false;
+      return true;
     });
     const skippedCount = newRows.slice(1).length - genuinelyNew.length;
 
@@ -668,8 +684,13 @@ export default function PledgePage() {
     fieldOverridesRef.current = newOverrides;
     setFieldOverrides(newOverrides);
 
-    // Persist so manual picks survive closing/reopening before push.
-    persistOverridesBg(resultsRef.current, newOverrides);
+    // Persist so manual picks / edits survive closing/reopening before push.
+    // Debounced so typing in an editable cell doesn't fire a save per keystroke.
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(
+      () => persistOverridesBg(resultsRef.current, fieldOverridesRef.current),
+      600
+    );
   }
 
   function toggleRow(pabblyIndex) {

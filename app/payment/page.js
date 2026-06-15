@@ -118,8 +118,13 @@ export default function PaymentPage() {
   const [paymentRevertError,    setPaymentRevertError]    = useState(null);
   const [paymentAddMsg,         setPaymentAddMsg]         = useState(null);
   const [paymentAddSnapshot,    setPaymentAddSnapshot]    = useState(null); // {parsedRows, formatSummary} before last "Add file"
+  const [rangeFrom,             setRangeFrom]             = useState(""); // yyyy-mm-dd — only import transactions in range
+  const [rangeTo,               setRangeTo]               = useState("");
 
   const addFileInputRef = useRef(null);
+  // Master data + processed fingerprints, kept so inline edits can re-match
+  const paymentMatchRef = useRef({ masterRows: [], masterHeaders: [], fingerprints: [] });
+  const editSaveTimerRef = useRef(null);
 
   useEffect(() => {
     const { sheetId: sid, tabName: tab, sheetTitle: title } = getConfig();
@@ -206,6 +211,9 @@ export default function PaymentPage() {
       // otherwise repeat indices → duplicate React keys and broken selection).
       parsedRows = parsedRows.map((r, i) => ({ ...r, rowIndex: i }));
 
+      // Keep master data so inline edits can re-match without re-fetching
+      paymentMatchRef.current = { masterRows: sheetData.rows, masterHeaders: sheetData.headers, fingerprints };
+
       const results    = matchPayments(parsedRows, sheetData.rows, sheetData.headers, fingerprints);
       const dupCount   = results.filter((r) => r.isDuplicate).length;
       const visible    = results.filter((r) => !r.isDuplicate);
@@ -270,13 +278,52 @@ export default function PaymentPage() {
       return;
     }
 
+    // Restrict to the chosen date range (for weekly uploads from a full-year file)
+    const total   = parsed.rows.length;
+    const inRange = filterByRange(parsed.rows);
+    if (inRange.length === 0) {
+      setPaymentStatusMsg(
+        rangeActive()
+          ? "No transactions fall within the selected date range."
+          : "No transactions found in this file."
+      );
+      return;
+    }
+    const summary = recountSummary(parsed.formatSummary, inRange);
+
     // Fresh file — clear any previous add snapshot/message
     setPaymentAddSnapshot(null);
-    setPaymentAddMsg(null);
+    setPaymentAddMsg(rangeActive() ? `Imported ${inRange.length} of ${total} transactions in range` : null);
 
     // Save to queue tab for session persistence, then resume into preview
-    saveQueueBg(sid, parsed.rows);
-    await resumeFromRows(parsed.rows, sid, tab, parsed.formatSummary ?? []);
+    saveQueueBg(sid, inRange);
+    await resumeFromRows(inRange, sid, tab, summary);
+  }
+
+  // ── Date-range filtering (week-to-week extraction) ──────────────────────────
+
+  function rangeActive() { return Boolean(rangeFrom || rangeTo); }
+
+  function filterByRange(rows) {
+    const from = rangeFrom ? new Date(`${rangeFrom}T00:00:00Z`) : null;
+    const to   = rangeTo   ? new Date(`${rangeTo}T23:59:59Z`)   : null;
+    if (!from && !to) return rows;
+    return rows.filter((r) => {
+      if (!r.date) return false; // can't place an undated row in a range
+      const d = new Date(r.date);
+      if (from && d < from) return false;
+      if (to && d > to)     return false;
+      return true;
+    });
+  }
+
+  // Re-count per-sheet totals after filtering, dropping sheets with no rows left.
+  function recountSummary(summary, rows) {
+    const counts = {};
+    rows.forEach((r) => { counts[r.sheetName] = (counts[r.sheetName] ?? 0) + 1; });
+    return (summary ?? [])
+      .map((s) => ({ ...s, count: counts[s.sheetName] ?? 0 }))
+      .filter((s) => s.count > 0);
   }
 
   // ── Add file (merge another bank export into the current session) ───────────
@@ -308,14 +355,22 @@ export default function PaymentPage() {
       return;
     }
 
+    // Apply the same date-range restriction to the added file
+    const ranged = filterByRange(parsed.rows);
+
     // Only merge transactions not already in the current preview (dedup by fingerprint)
     const existing     = new Set(paymentParsedRows.map((r) => r.fingerprint));
-    const genuinelyNew = parsed.rows.filter((r) => !existing.has(r.fingerprint));
-    const skipped      = parsed.rows.length - genuinelyNew.length;
+    const genuinelyNew = ranged.filter((r) => !existing.has(r.fingerprint));
+    const skipped      = ranged.length - genuinelyNew.length;
+    const outOfRange   = parsed.rows.length - ranged.length;
 
     if (genuinelyNew.length === 0) {
       setPaymentStatusMsg("");
-      setPaymentAddMsg(`All ${parsed.rows.length} transaction${parsed.rows.length !== 1 ? "s" : ""} already in preview`);
+      setPaymentAddMsg(
+        ranged.length === 0 && rangeActive()
+          ? "No transactions in the new file fall within the selected date range"
+          : `All ${ranged.length} transaction${ranged.length !== 1 ? "s" : ""} already in preview`
+      );
       return;
     }
 
@@ -323,14 +378,30 @@ export default function PaymentPage() {
     setPaymentAddSnapshot({ parsedRows: paymentParsedRows, formatSummary: paymentFormatSummary });
 
     const merged        = [...paymentParsedRows, ...genuinelyNew];
-    const mergedSummary = mergeFormatSummaries(paymentFormatSummary, parsed.formatSummary);
+    const mergedSummary = mergeFormatSummaries(paymentFormatSummary, recountSummary(parsed.formatSummary, genuinelyNew));
 
     saveQueueBg(sid, merged);
     await resumeFromRows(merged, sid, tab, mergedSummary);
 
     const parts = [`${genuinelyNew.length} transaction${genuinelyNew.length !== 1 ? "s" : ""} added`];
-    if (skipped > 0) parts.push(`${skipped} duplicate${skipped !== 1 ? "s" : ""} skipped`);
+    if (skipped > 0)    parts.push(`${skipped} duplicate${skipped !== 1 ? "s" : ""} skipped`);
+    if (outOfRange > 0) parts.push(`${outOfRange} out of range`);
     setPaymentAddMsg(parts.join(" · "));
+  }
+
+  // Inline edit of a transaction's amount / month → re-match and persist.
+  function handleEditPaymentRow(rowIndex, patch) {
+    const { masterRows, masterHeaders, fingerprints } = paymentMatchRef.current;
+    const nextParsed = paymentParsedRows.map((r) => (r.rowIndex === rowIndex ? { ...r, ...patch } : r));
+    const results    = matchPayments(nextParsed, masterRows, masterHeaders, fingerprints);
+
+    setPaymentParsedRows(nextParsed);
+    setPaymentResults(results.filter((r) => !r.isDuplicate));
+
+    // Debounced queue save so a flurry of edits doesn't hammer Sheets
+    const { sheetId: sid } = getConfig();
+    if (editSaveTimerRef.current) clearTimeout(editSaveTimerRef.current);
+    editSaveTimerRef.current = setTimeout(() => saveQueueBg(sid, nextParsed), 600);
   }
 
   // Dismiss rows from the preview AND from the queue, so they don't reappear on resume.
@@ -623,6 +694,46 @@ export default function PaymentPage() {
               </div>
             </div>
 
+            {/* Date-range filter — for weekly uploads from a full-year export */}
+            <div className="bg-white rounded-2xl border border-black/8 shadow-sm p-5 mb-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-black">Date range <span className="font-normal text-black/40">(optional)</span></p>
+                  <p className="text-xs text-black/50 mt-0.5">Only import transactions dated within this range — handy when the file covers the whole year but you process one week at a time.</p>
+                </div>
+                {(rangeFrom || rangeTo) && (
+                  <button
+                    onClick={() => { setRangeFrom(""); setRangeTo(""); }}
+                    className="text-xs text-black/40 underline shrink-0 mt-0.5"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-3 mt-3">
+                <label className="flex-1">
+                  <span className="block text-xs font-medium text-black/50 mb-1">From</span>
+                  <input
+                    type="date"
+                    value={rangeFrom}
+                    max={rangeTo || undefined}
+                    onChange={(e) => setRangeFrom(e.target.value)}
+                    className="w-full px-3 py-2 border border-black/15 rounded-xl text-sm text-black focus:outline-none focus:ring-2 focus:ring-black/20 focus:border-black/30 transition-all"
+                  />
+                </label>
+                <label className="flex-1">
+                  <span className="block text-xs font-medium text-black/50 mb-1">To</span>
+                  <input
+                    type="date"
+                    value={rangeTo}
+                    min={rangeFrom || undefined}
+                    onChange={(e) => setRangeTo(e.target.value)}
+                    className="w-full px-3 py-2 border border-black/15 rounded-xl text-sm text-black focus:outline-none focus:ring-2 focus:ring-black/20 focus:border-black/30 transition-all"
+                  />
+                </label>
+              </div>
+            </div>
+
             <div className="bg-white rounded-2xl border border-black/8 shadow-sm p-6">
               <DropZone onFile={handlePaymentFile} />
             </div>
@@ -721,6 +832,7 @@ export default function PaymentPage() {
                 onPushSelected={handlePushPayments}
                 onDismissRow={(row) => dismissPaymentRows([row])}
                 onDismissRows={(rows) => dismissPaymentRows(rows)}
+                onEditRow={handleEditPaymentRow}
                 pushing={paymentPushing}
                 pushMsg={paymentPushMsg}
                 pushError={paymentPushError}

@@ -118,10 +118,35 @@ function EndCell({ result, colIndex, mono = false, fieldOverrides, onFieldOverri
     );
   }
 
+  // Plain cell — editable. Typed value becomes a literal override applied on push.
+  const override = (fieldOverrides?.[result.pabblyIndex] ?? {})[colIndex];
+  const value    = (override !== undefined && override !== "pabbly" && override !== "master") ? override : endVal;
   return (
     <td className={cls}>
-      <span className="text-black">{endVal || <span className="text-black/30">—</span>}</span>
+      <EditableInput
+        value={value}
+        mono={mono}
+        onChange={(v) => onFieldOverride(result.pabblyIndex, colIndex, v)}
+      />
     </td>
+  );
+}
+
+// Current value for a cell: a literal manual override if present, else the fallback.
+function fieldOverrideVal(fieldOverrides, pabblyIndex, colIndex, fallback) {
+  const ov = (fieldOverrides?.[pabblyIndex] ?? {})[colIndex];
+  return (ov !== undefined && ov !== "pabbly" && ov !== "master") ? ov : (fallback ?? "");
+}
+
+// Inline-editable text input styled to look like plain text until hovered/focused.
+function EditableInput({ value, onChange, mono = false }) {
+  return (
+    <input
+      type="text"
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value)}
+      className={`w-full bg-transparent border border-transparent hover:border-black/15 focus:border-black/40 focus:bg-white rounded-md px-1.5 py-1 text-xs text-black outline-none transition-all ${mono ? "font-mono" : ""}`}
+    />
   );
 }
 
@@ -574,7 +599,11 @@ export default function PreviewTable({
                       <span className={`px-2 py-0.5 rounded-md text-xs font-semibold border ${meta.badgeCls}`}>{meta.label}</span>
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-black">
-                      {result.outputRow[MASTER_COLS.MF_NUMBER] || <span className="text-black/30">—</span>}
+                      <EditableInput
+                        mono
+                        value={fieldOverrideVal(fieldOverrides, result.pabblyIndex, MASTER_COLS.MF_NUMBER, result.outputRow[MASTER_COLS.MF_NUMBER])}
+                        onChange={(v) => onFieldOverride(result.pabblyIndex, MASTER_COLS.MF_NUMBER, v)}
+                      />
                     </td>
                     <EndCell result={result} colIndex={MASTER_COLS.FULL_NAME}      fieldOverrides={fieldOverrides} onFieldOverride={onFieldOverride} />
                     <EndCell result={result} colIndex={MASTER_COLS.REGION}         fieldOverrides={fieldOverrides} onFieldOverride={onFieldOverride} />
@@ -582,14 +611,14 @@ export default function PreviewTable({
                     <EndCell result={result} colIndex={MASTER_COLS.CONTACT_NUMBER} fieldOverrides={fieldOverrides} onFieldOverride={onFieldOverride} />
                     <EndCell result={result} colIndex={MASTER_COLS.EMAIL}          fieldOverrides={fieldOverrides} onFieldOverride={onFieldOverride} />
                     <td className="px-4 py-3 font-mono text-xs">
-                      {isAdd && masterPledge ? (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-black/30 line-through">{masterPledge}</span>
-                          <span className="text-amber-700 font-medium">{pledgeVal || "—"}</span>
-                        </div>
-                      ) : (
-                        <span className="text-black">{pledgeVal || <span className="text-black/30">—</span>}</span>
+                      {isAdd && masterPledge && (
+                        <span className="block leading-none mb-0.5 text-black/30 line-through">{masterPledge}</span>
                       )}
+                      <EditableInput
+                        mono
+                        value={fieldOverrideVal(fieldOverrides, result.pabblyIndex, MASTER_COLS.PLEDGE_AMOUNT, pledgeVal)}
+                        onChange={(v) => onFieldOverride(result.pabblyIndex, MASTER_COLS.PLEDGE_AMOUNT, v)}
+                      />
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-1">
