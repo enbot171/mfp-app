@@ -16,6 +16,44 @@ function getConfig() {
   catch { return {}; }
 }
 
+// ── Week grouping (Mon–Sun) for the upload week-picker ────────────────────────
+const MONS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function mondayOfUTC(date) {
+  const d   = new Date(date);
+  const u   = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const dow = (u.getUTCDay() + 6) % 7; // Monday = 0
+  u.setUTCDate(u.getUTCDate() - dow);
+  return u;
+}
+const weekKeyUTC = (date) => mondayOfUTC(date).toISOString().slice(0, 10);
+
+function weekLabel(start) {
+  const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() + 6));
+  return start.getUTCMonth() === end.getUTCMonth()
+    ? `${start.getUTCDate()}–${end.getUTCDate()} ${MONS[end.getUTCMonth()]}`
+    : `${start.getUTCDate()} ${MONS[start.getUTCMonth()]} – ${end.getUTCDate()} ${MONS[end.getUTCMonth()]}`;
+}
+
+// Group parsed transactions into weeks, marking new vs already-pushed.
+function groupIntoWeeks(rows, pushedSet) {
+  const map = new Map();
+  const noDate = [];
+  rows.forEach((r) => {
+    if (!r.date) { noDate.push(r); return; }
+    const key = weekKeyUTC(r.date);
+    if (!map.has(key)) map.set(key, { key, start: mondayOfUTC(r.date), rows: [] });
+    map.get(key).rows.push(r);
+  });
+  const weeks = [...map.values()]
+    .map((w) => ({ ...w, total: w.rows.length, newCount: w.rows.filter((r) => !pushedSet.has(r.fingerprint)).length, label: weekLabel(w.start), year: w.start.getUTCFullYear() }))
+    .sort((a, b) => b.start - a.start); // newest first
+  if (noDate.length) {
+    weeks.push({ key: "__nodate__", start: null, rows: noDate, total: noDate.length, newCount: noDate.filter((r) => !pushedSet.has(r.fingerprint)).length, label: "No date", year: "" });
+  }
+  return weeks;
+}
+
 // ── Queue serialization ───────────────────────────────────────────────────────
 
 const QUEUE_HEADERS = ["fingerprint", "sheetName", "mfNumber", "mfAutoCorrected", "amount", "date", "month"];
@@ -118,8 +156,11 @@ export default function PaymentPage() {
   const [paymentRevertError,    setPaymentRevertError]    = useState(null);
   const [paymentAddMsg,         setPaymentAddMsg]         = useState(null);
   const [paymentAddSnapshot,    setPaymentAddSnapshot]    = useState(null); // {parsedRows, formatSummary} before last "Add file"
-  const [rangeFrom,             setRangeFrom]             = useState(""); // yyyy-mm-dd — only import transactions in range
-  const [rangeTo,               setRangeTo]               = useState("");
+  // Week picker (shown after upload when a file spans multiple weeks)
+  const [pendingParse,  setPendingParse]  = useState(null); // { rows, formatSummary } awaiting week selection
+  const [weekBuckets,   setWeekBuckets]   = useState([]);
+  const [selectedWeeks, setSelectedWeeks] = useState(new Set());
+  const [weekLoading,   setWeekLoading]   = useState(false); // blocking overlay while a file is parsed/grouped
 
   const addFileInputRef = useRef(null);
   // Master data + processed fingerprints, kept so inline edits can re-match
@@ -248,6 +289,9 @@ export default function PaymentPage() {
     setPaymentRevertRows([]);
     setPaymentAddSnapshot(null);
     setPaymentAddMsg(null);
+    setPendingParse(null);
+    setWeekBuckets([]);
+    setSelectedWeeks(new Set());
     setPhase(logRows.length > 0 ? PHASES.LOG : PHASES.UPLOAD);
   }
 
@@ -260,61 +304,106 @@ export default function PaymentPage() {
     setPaymentRevertRows([]);
     setPaymentRevertMsg(null);
     setPaymentRevertError(null);
-    setPaymentStatusMsg("Parsing file…");
+    setWeekLoading(true);                            // block interaction while parsing
+    await new Promise((r) => setTimeout(r, 0));      // let the overlay paint first
 
-    let sheets;
     try {
-      sheets = await parseAllSheets(file);
-    } catch (err) {
-      setPaymentStatusMsg(`Parse error: ${err.message}`);
-      return;
+      let sheets;
+      try {
+        sheets = await parseAllSheets(file);
+      } catch (err) {
+        setPaymentStatusMsg(`Parse error: ${err.message}`);
+        return;
+      }
+
+      let parsed;
+      try {
+        parsed = parsePaymentFile(sheets);
+      } catch (err) {
+        setPaymentStatusMsg(err.message);
+        return;
+      }
+      if (parsed.rows.length === 0) {
+        setPaymentStatusMsg("No transactions found in this file.");
+        return;
+      }
+
+      // Fetch already-pushed fingerprints so the week picker can mark new vs pushed
+      let pushedSet = new Set();
+      try {
+        const res = await fetch(`/api/payment?sheetId=${encodeURIComponent(sid)}`);
+        if (res.ok) pushedSet = new Set((await res.json()).fingerprints ?? []);
+      } catch { /* best-effort */ }
+
+      const weeks = groupIntoWeeks(parsed.rows, pushedSet);
+      setPaymentAddSnapshot(null);
+      setPaymentAddMsg(null);
+      setPaymentStatusMsg("");
+
+      // A single week → no need to choose; import everything straight away
+      if (weeks.length <= 1) {
+        await importParsedRows(parsed.rows, parsed.formatSummary);
+        return;
+      }
+
+      // Multiple weeks → open the picker modal (new weeks pre-selected)
+      setPendingParse({ ...parsed, mode: "fresh" });
+      setWeekBuckets(weeks);
+      setSelectedWeeks(new Set(weeks.filter((w) => w.newCount > 0).map((w) => w.key)));
+    } finally {
+      setWeekLoading(false);
     }
-
-    let parsed;
-    try {
-      parsed = parsePaymentFile(sheets);
-    } catch (err) {
-      setPaymentStatusMsg(err.message);
-      return;
-    }
-
-    // Restrict to the chosen date range (for weekly uploads from a full-year file)
-    const total   = parsed.rows.length;
-    const inRange = filterByRange(parsed.rows);
-    if (inRange.length === 0) {
-      setPaymentStatusMsg(
-        rangeActive()
-          ? "No transactions fall within the selected date range."
-          : "No transactions found in this file."
-      );
-      return;
-    }
-    const summary = recountSummary(parsed.formatSummary, inRange);
-
-    // Fresh file — clear any previous add snapshot/message
-    setPaymentAddSnapshot(null);
-    setPaymentAddMsg(rangeActive() ? `Imported ${inRange.length} of ${total} transactions in range` : null);
-
-    // Save to queue tab for session persistence, then resume into preview
-    saveQueueBg(sid, inRange);
-    await resumeFromRows(inRange, sid, tab, summary);
   }
 
-  // ── Date-range filtering (week-to-week extraction) ──────────────────────────
+  // Import a set of parsed rows: persist to the queue and open the preview.
+  async function importParsedRows(rows, formatSummary) {
+    const { sheetId: sid, tabName: tab } = getConfig();
+    saveQueueBg(sid, rows);
+    await resumeFromRows(rows, sid, tab, recountSummary(formatSummary, rows));
+  }
 
-  function rangeActive() { return Boolean(rangeFrom || rangeTo); }
+  // Import only the weeks the user ticked. "fresh" replaces the session; "add"
+  // merges the picked weeks into whatever is already in the preview.
+  async function handleImportWeeks() {
+    if (!pendingParse) return;
+    const { rows, formatSummary, mode } = pendingParse;
+    const picked = rows.filter((r) => selectedWeeks.has(r.date ? weekKeyUTC(r.date) : "__nodate__"));
+    if (picked.length === 0) return;
+    setPendingParse(null);
+    setWeekBuckets([]);
+    if (mode === "add") await mergeWeeks(picked, formatSummary);
+    else                await importParsedRows(picked, formatSummary);
+  }
 
-  function filterByRange(rows) {
-    const from = rangeFrom ? new Date(`${rangeFrom}T00:00:00Z`) : null;
-    const to   = rangeTo   ? new Date(`${rangeTo}T23:59:59Z`)   : null;
-    if (!from && !to) return rows;
-    return rows.filter((r) => {
-      if (!r.date) return false; // can't place an undated row in a range
-      const d = new Date(r.date);
-      if (from && d < from) return false;
-      if (to && d > to)     return false;
-      return true;
-    });
+  function cancelWeekPicker() {
+    setPendingParse(null);
+    setWeekBuckets([]);
+    setSelectedWeeks(new Set());
+    setPaymentStatusMsg("");
+  }
+
+  // Merge a set of picked rows into the current preview (dedup by fingerprint).
+  async function mergeWeeks(rows, formatSummary) {
+    const { sheetId: sid, tabName: tab } = getConfig();
+    const existing     = new Set(paymentParsedRows.map((r) => r.fingerprint));
+    const genuinelyNew = rows.filter((r) => !existing.has(r.fingerprint));
+    const skipped      = rows.length - genuinelyNew.length;
+
+    if (genuinelyNew.length === 0) {
+      setPaymentAddMsg(`All ${rows.length} transaction${rows.length !== 1 ? "s" : ""} already in preview`);
+      setPhase(PHASES.PREVIEW);
+      return;
+    }
+
+    setPaymentAddSnapshot({ parsedRows: paymentParsedRows, formatSummary: paymentFormatSummary });
+    const merged        = [...paymentParsedRows, ...genuinelyNew];
+    const mergedSummary = mergeFormatSummaries(paymentFormatSummary, recountSummary(formatSummary, genuinelyNew));
+    saveQueueBg(sid, merged);
+    await resumeFromRows(merged, sid, tab, mergedSummary);
+
+    const parts = [`${genuinelyNew.length} transaction${genuinelyNew.length !== 1 ? "s" : ""} added`];
+    if (skipped > 0) parts.push(`${skipped} duplicate${skipped !== 1 ? "s" : ""} skipped`);
+    setPaymentAddMsg(parts.join(" · "));
   }
 
   // Re-count per-sheet totals after filtering, dropping sheets with no rows left.
@@ -340,53 +429,48 @@ export default function PaymentPage() {
   }
 
   async function handleAddMorePayments(file) {
-    const { sheetId: sid, tabName: tab } = getConfig();
+    const { sheetId: sid } = getConfig();
 
     setPaymentAddMsg(null);
-    setPaymentStatusMsg("Parsing file…");
+    setWeekLoading(true);                            // block interaction while parsing
+    await new Promise((r) => setTimeout(r, 0));      // let the overlay paint first
 
-    let parsed;
     try {
-      const sheets = await parseAllSheets(file);
-      parsed = parsePaymentFile(sheets);
-    } catch (err) {
-      setPaymentStatusMsg("");
-      setPaymentAddMsg(err.message);
-      return;
+      let parsed;
+      try {
+        const sheets = await parseAllSheets(file);
+        parsed = parsePaymentFile(sheets);
+      } catch (err) {
+        setPaymentAddMsg(err.message);
+        return;
+      }
+      if (parsed.rows.length === 0) {
+        setPaymentAddMsg("No transactions found in this file.");
+        return;
+      }
+
+      // Mark a week "new" only if it's not already in the preview OR the pushed log
+      const presentSet = new Set(paymentParsedRows.map((r) => r.fingerprint));
+      try {
+        const res = await fetch(`/api/payment?sheetId=${encodeURIComponent(sid)}`);
+        if (res.ok) (await res.json()).fingerprints?.forEach((fp) => presentSet.add(fp));
+      } catch { /* best-effort */ }
+
+      const weeks = groupIntoWeeks(parsed.rows, presentSet);
+
+      // Single week → no need to choose; merge straight into the preview
+      if (weeks.length <= 1) {
+        await mergeWeeks(parsed.rows, parsed.formatSummary);
+        return;
+      }
+
+      // Multiple weeks → open the picker modal over the preview
+      setPendingParse({ ...parsed, mode: "add" });
+      setWeekBuckets(weeks);
+      setSelectedWeeks(new Set(weeks.filter((w) => w.newCount > 0).map((w) => w.key)));
+    } finally {
+      setWeekLoading(false);
     }
-
-    // Apply the same date-range restriction to the added file
-    const ranged = filterByRange(parsed.rows);
-
-    // Only merge transactions not already in the current preview (dedup by fingerprint)
-    const existing     = new Set(paymentParsedRows.map((r) => r.fingerprint));
-    const genuinelyNew = ranged.filter((r) => !existing.has(r.fingerprint));
-    const skipped      = ranged.length - genuinelyNew.length;
-    const outOfRange   = parsed.rows.length - ranged.length;
-
-    if (genuinelyNew.length === 0) {
-      setPaymentStatusMsg("");
-      setPaymentAddMsg(
-        ranged.length === 0 && rangeActive()
-          ? "No transactions in the new file fall within the selected date range"
-          : `All ${ranged.length} transaction${ranged.length !== 1 ? "s" : ""} already in preview`
-      );
-      return;
-    }
-
-    // Snapshot for undo (only once we know we will merge)
-    setPaymentAddSnapshot({ parsedRows: paymentParsedRows, formatSummary: paymentFormatSummary });
-
-    const merged        = [...paymentParsedRows, ...genuinelyNew];
-    const mergedSummary = mergeFormatSummaries(paymentFormatSummary, recountSummary(parsed.formatSummary, genuinelyNew));
-
-    saveQueueBg(sid, merged);
-    await resumeFromRows(merged, sid, tab, mergedSummary);
-
-    const parts = [`${genuinelyNew.length} transaction${genuinelyNew.length !== 1 ? "s" : ""} added`];
-    if (skipped > 0)    parts.push(`${skipped} duplicate${skipped !== 1 ? "s" : ""} skipped`);
-    if (outOfRange > 0) parts.push(`${outOfRange} out of range`);
-    setPaymentAddMsg(parts.join(" · "));
   }
 
   // Inline edit of a transaction's amount / month → re-match and persist.
@@ -586,6 +670,9 @@ export default function PaymentPage() {
     setPaymentRevertError(null);
     setPaymentAddSnapshot(null);
     setPaymentAddMsg(null);
+    setPendingParse(null);
+    setWeekBuckets([]);
+    setSelectedWeeks(new Set());
     setPhase(PHASES.LOG);
     loadLog(sheetId);
   }
@@ -690,47 +777,7 @@ export default function PaymentPage() {
               </button>
               <div>
                 <h2 className="text-2xl font-bold text-black tracking-tight">Upload Payment File</h2>
-                <p className="text-sm text-black/50 mt-1">Drag and drop your bank transaction export.</p>
-              </div>
-            </div>
-
-            {/* Date-range filter — for weekly uploads from a full-year export */}
-            <div className="bg-white rounded-2xl border border-black/8 shadow-sm p-5 mb-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-black">Date range <span className="font-normal text-black/40">(optional)</span></p>
-                  <p className="text-xs text-black/50 mt-0.5">Only import transactions dated within this range — handy when the file covers the whole year but you process one week at a time.</p>
-                </div>
-                {(rangeFrom || rangeTo) && (
-                  <button
-                    onClick={() => { setRangeFrom(""); setRangeTo(""); }}
-                    className="text-xs text-black/40 underline shrink-0 mt-0.5"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-              <div className="flex items-center gap-3 mt-3">
-                <label className="flex-1">
-                  <span className="block text-xs font-medium text-black/50 mb-1">From</span>
-                  <input
-                    type="date"
-                    value={rangeFrom}
-                    max={rangeTo || undefined}
-                    onChange={(e) => setRangeFrom(e.target.value)}
-                    className="w-full px-3 py-2 border border-black/15 rounded-xl text-sm text-black focus:outline-none focus:ring-2 focus:ring-black/20 focus:border-black/30 transition-all"
-                  />
-                </label>
-                <label className="flex-1">
-                  <span className="block text-xs font-medium text-black/50 mb-1">To</span>
-                  <input
-                    type="date"
-                    value={rangeTo}
-                    min={rangeFrom || undefined}
-                    onChange={(e) => setRangeTo(e.target.value)}
-                    className="w-full px-3 py-2 border border-black/15 rounded-xl text-sm text-black focus:outline-none focus:ring-2 focus:ring-black/20 focus:border-black/30 transition-all"
-                  />
-                </label>
+                <p className="text-sm text-black/50 mt-1">Drag and drop your bank export — you'll pick which week(s) to import next.</p>
               </div>
             </div>
 
@@ -749,6 +796,108 @@ export default function PaymentPage() {
                 <p className="text-sm text-black/50">{paymentStatusMsg}</p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── BLOCKING LOADER (while a file is parsed/grouped into weeks) ── */}
+        {weekLoading && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl shadow-2xl px-6 py-5 flex items-center gap-3">
+              <svg className="w-5 h-5 text-black/60 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              <div>
+                <p className="text-sm font-semibold text-black">Reading file…</p>
+                <p className="text-xs text-black/50">Grouping transactions by week — please wait.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── WEEK PICKER MODAL ── */}
+        {weekBuckets.length > 0 && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={cancelWeekPicker}>
+            <div
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between px-6 py-4 border-b border-black/8">
+                <div>
+                  <h2 className="text-base font-bold text-black">
+                    {pendingParse?.mode === "add" ? "Choose weeks to add" : "Choose weeks to import"}
+                  </h2>
+                  <p className="text-xs text-black/50 mt-0.5">
+                    This file has {weekBuckets.length} week{weekBuckets.length !== 1 ? "s" : ""} of transactions.
+                    {pendingParse?.mode === "add" ? " Selected weeks are added to the preview." : ""} New weeks are pre-selected.
+                  </p>
+                </div>
+                <button onClick={cancelWeekPicker} className="text-black/40 hover:text-black transition-colors text-lg leading-none shrink-0">✕</button>
+              </div>
+
+              {/* Quick toggles */}
+              <div className="flex items-center gap-2 px-6 py-2.5 border-b border-black/8 bg-black/2">
+                <button onClick={() => setSelectedWeeks(new Set(weekBuckets.map((w) => w.key)))} className="text-xs font-medium text-black/60 hover:text-black underline">Select all</button>
+                <span className="text-black/20">·</span>
+                <button onClick={() => setSelectedWeeks(new Set(weekBuckets.filter((w) => w.newCount > 0).map((w) => w.key)))} className="text-xs font-medium text-black/60 hover:text-black underline">Only new</button>
+                <span className="text-black/20">·</span>
+                <button onClick={() => setSelectedWeeks(new Set())} className="text-xs font-medium text-black/60 hover:text-black underline">Clear</button>
+              </div>
+
+              {/* Week rows */}
+              <div className="flex-1 overflow-auto divide-y divide-black/5">
+                {weekBuckets.map((w) => {
+                  const checked = selectedWeeks.has(w.key);
+                  const present = w.total - w.newCount;
+                  const seen    = pendingParse?.mode === "add" ? "already added" : "already pushed";
+                  const tag = w.newCount === w.total ? "all new"
+                    : w.newCount === 0 ? `all ${seen}`
+                    : `${w.newCount} new · ${present} ${pendingParse?.mode === "add" ? "in preview" : "pushed"}`;
+                  return (
+                    <label key={w.key} className="flex items-center gap-3 px-6 py-3 hover:bg-black/2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => setSelectedWeeks((prev) => {
+                          const n = new Set(prev);
+                          if (n.has(w.key)) n.delete(w.key); else n.add(w.key);
+                          return n;
+                        })}
+                        className="rounded border-black/25 accent-black"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-black">
+                          {w.label}{w.year ? <span className="font-normal text-black/40"> {w.year}</span> : null}
+                        </div>
+                        <div className="text-xs text-black/45">{w.total} transaction{w.total !== 1 ? "s" : ""}</div>
+                      </div>
+                      <span className={`text-xs font-medium shrink-0 ${w.newCount === 0 ? "text-black/30" : "text-emerald-700"}`}>{tag}</span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-black/8">
+                <p className="text-sm text-black/50">
+                  {(() => {
+                    const rows = weekBuckets.filter((w) => selectedWeeks.has(w.key)).reduce((n, w) => n + w.total, 0);
+                    return `${selectedWeeks.size} week${selectedWeeks.size !== 1 ? "s" : ""} · ${rows} transaction${rows !== 1 ? "s" : ""}`;
+                  })()}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button onClick={cancelWeekPicker} className="px-4 py-2 text-sm border border-black/15 rounded-xl text-black hover:bg-black/5 transition-all">Cancel</button>
+                  <button
+                    onClick={handleImportWeeks}
+                    disabled={selectedWeeks.size === 0}
+                    className="px-5 py-2 text-sm bg-black text-white rounded-xl font-semibold hover:bg-black/80 disabled:opacity-30 transition-all"
+                  >
+                    {pendingParse?.mode === "add" ? "Add selected →" : "Import selected →"}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

@@ -2,7 +2,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { MASTER_COLS } from "@/config/columns";
 import ErrorBadge from "./ErrorBadge";
-import { exportReviewReport } from "@/lib/exportReviewReport";
+import { exportReviewReport, exportAllRegionsSeparate, exportAllRegionsCombined } from "@/lib/exportReviewReport";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -271,6 +271,16 @@ function ExportModal({ results, onClose }) {
     onClose();
   }
 
+  function handleExportSeparate() {
+    exportAllRegionsSeparate(results);
+    onClose();
+  }
+
+  function handleExportCombined() {
+    exportAllRegionsCombined(results);
+    onClose();
+  }
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
@@ -281,10 +291,31 @@ function ExportModal({ results, onClose }) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-black/8">
           <div>
             <h2 className="text-base font-bold text-black">Export Review Report</h2>
-            <p className="text-xs text-black/50 mt-0.5">Select a region to preview and download the report for that region's reviewer.</p>
+            <p className="text-xs text-black/50 mt-0.5">
+              Pick a region to preview one report, or export every region at once ({reviewRegions.length} region{reviewRegions.length !== 1 ? "s" : ""} with review rows).
+            </p>
           </div>
           <button onClick={onClose} className="text-black/40 hover:text-black transition-colors text-lg leading-none">✕</button>
         </div>
+
+        {/* Bulk export — all regions */}
+        {reviewRegions.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 px-6 py-3 bg-black/2 border-b border-black/8">
+            <span className="text-xs font-medium text-black/50 mr-1">Export all regions:</span>
+            <button
+              onClick={handleExportSeparate}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-all"
+            >
+              Separate files ({reviewRegions.length})
+            </button>
+            <button
+              onClick={handleExportCombined}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-all"
+            >
+              One combined file
+            </button>
+          </div>
+        )}
 
         {/* Region selector */}
         <div className="px-6 py-4 border-b border-black/8">
@@ -405,8 +436,9 @@ export default function PreviewTable({
           if (sortCol === "name")   return r.outputRow[MASTER_COLS.FULL_NAME] ?? "";
           if (sortCol === "mf")     return r.outputRow[MASTER_COLS.MF_NUMBER] ?? "";
           if (sortCol === "region") return r.outputRow[MASTER_COLS.REGION] ?? "";
-          if (sortCol === "email")  return r.outputRow[MASTER_COLS.EMAIL] ?? "";
-          if (sortCol === "pledge") return parseFloat(r.outputRow[MASTER_COLS.PLEDGE_AMOUNT]) || 0;
+          if (sortCol === "email")   return r.outputRow[MASTER_COLS.EMAIL] ?? "";
+          if (sortCol === "service") return r.outputRow[MASTER_COLS.SERVICE] ?? "";
+          if (sortCol === "pledge")  return parseFloat(r.outputRow[MASTER_COLS.PLEDGE_AMOUNT]) || 0;
           if (sortCol === "status") return r.matchType ?? "";
           return "";
         };
@@ -559,6 +591,7 @@ export default function PreviewTable({
                 <th className="px-4 py-2 w-24 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">NRIC</span></th>
                 <th className="px-4 py-2 w-28 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">Contact</span></th>
                 <th className="px-4 py-2 w-52 text-left align-middle"><SortBtn col="email"  sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Email</SortBtn></th>
+                <th className="px-4 py-2 w-28 text-left align-middle"><SortBtn col="service" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Service</SortBtn></th>
                 <th className="px-4 py-2 w-28 text-left align-middle"><SortBtn col="pledge" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Pledge</SortBtn></th>
                 <th className="px-4 py-2 w-40 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">Issues</span></th>
                 <th className="px-3 py-2 w-20 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">Actions</span></th>
@@ -574,13 +607,14 @@ export default function PreviewTable({
                 <td className="px-4 pb-2"><FilterInput placeholder="Search…" value={filterEmail} onChange={setFilterEmail} /></td>
                 <td className="px-4 pb-2"></td>
                 <td className="px-4 pb-2"></td>
+                <td className="px-4 pb-2"></td>
                 <td className="px-3 pb-2"></td>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-black/5">
               {filtered.length === 0 && (
-                <tr><td colSpan={11} className="px-4 py-12 text-center text-sm text-black/30">No rows match your filters</td></tr>
+                <tr><td colSpan={12} className="px-4 py-12 text-center text-sm text-black/30">No rows match your filters</td></tr>
               )}
               {filtered.map((result) => {
                 const { matchType, errors } = result;
@@ -610,6 +644,12 @@ export default function PreviewTable({
                     <EndCell result={result} colIndex={MASTER_COLS.PARTIAL_NRIC}   fieldOverrides={fieldOverrides} onFieldOverride={onFieldOverride} mono />
                     <EndCell result={result} colIndex={MASTER_COLS.CONTACT_NUMBER} fieldOverrides={fieldOverrides} onFieldOverride={onFieldOverride} />
                     <EndCell result={result} colIndex={MASTER_COLS.EMAIL}          fieldOverrides={fieldOverrides} onFieldOverride={onFieldOverride} />
+                    <td className="px-4 py-3 text-xs">
+                      <EditableInput
+                        value={fieldOverrideVal(fieldOverrides, result.pabblyIndex, MASTER_COLS.SERVICE, result.outputRow[MASTER_COLS.SERVICE])}
+                        onChange={(v) => onFieldOverride(result.pabblyIndex, MASTER_COLS.SERVICE, v)}
+                      />
+                    </td>
                     <td className="px-4 py-3 font-mono text-xs">
                       {isAdd && masterPledge && (
                         <span className="block leading-none mb-0.5 text-black/30 line-through">{masterPledge}</span>
