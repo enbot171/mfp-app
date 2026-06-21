@@ -16,17 +16,18 @@ function getConfig() {
   catch { return {}; }
 }
 
-// ── Week grouping (Mon–Sun) for the upload week-picker ────────────────────────
+// ── Week grouping (Tue → following Mon) for the upload week-picker ────────────
 const MONS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-function mondayOfUTC(date) {
+// Statement weeks run Tuesday → the following Monday (e.g. 19 May → 25 May).
+function weekStartUTC(date) {
   const d   = new Date(date);
   const u   = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const dow = (u.getUTCDay() + 6) % 7; // Monday = 0
+  const dow = (u.getUTCDay() - 2 + 7) % 7; // Tuesday = 0
   u.setUTCDate(u.getUTCDate() - dow);
   return u;
 }
-const weekKeyUTC = (date) => mondayOfUTC(date).toISOString().slice(0, 10);
+const weekKeyUTC = (date) => weekStartUTC(date).toISOString().slice(0, 10);
 
 function weekLabel(start) {
   const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() + 6));
@@ -42,7 +43,7 @@ function groupIntoWeeks(rows, pushedSet) {
   rows.forEach((r) => {
     if (!r.date) { noDate.push(r); return; }
     const key = weekKeyUTC(r.date);
-    if (!map.has(key)) map.set(key, { key, start: mondayOfUTC(r.date), rows: [] });
+    if (!map.has(key)) map.set(key, { key, start: weekStartUTC(r.date), rows: [] });
     map.get(key).rows.push(r);
   });
   const weeks = [...map.values()]

@@ -39,9 +39,9 @@ members.forEach((mem) => {
   mem.base    = 50 + (hash(mem.mf + "amt") % 19) * 25;           // 50..500
 });
 
-// ── Build the MAR–AUG week grid (Mon-start weeks) ───────────────────────────
+// ── Build the MAR–AUG week grid (Tue → following Mon) ───────────────────────
 const weeks = [];
-let cur = utc(2026, 2, 2); // first Monday in Mar 2026 (Mar 2) — month index 2 = March
+let cur = utc(2026, 2, 3); // first Tuesday in Mar 2026 (Mar 3) — month index 2 = March
 const periodEnd = utc(2026, 7, 31); // Aug 31 — month index 7 = August
 let wn = 1;
 while (cur <= periodEnd) {
