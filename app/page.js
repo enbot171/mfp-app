@@ -83,18 +83,18 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5]">
-      <header className="bg-black px-6 py-4 flex items-center justify-between">
+    <div className="min-h-screen bg-canvas">
+      <header className="bg-shell px-6 py-3.5 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center shrink-0">
-            <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-8 h-8 bg-white/95 rounded-lg flex items-center justify-center shrink-0">
+            <svg className="w-4.5 h-4.5 text-shell" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
           </div>
           <div>
-            <h1 className="text-sm font-bold text-white tracking-tight">MFP App</h1>
-            <p className="text-xs text-white/40">Pledge &amp; Payment Processor</p>
+            <h1 className="text-sm font-semibold text-white tracking-tight">MFP App</h1>
+            <p className="text-xs text-white/50">Pledge &amp; Payment Processor</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -102,20 +102,20 @@ export default function HomePage() {
           <button
             onClick={copyEmail}
             title="Share your Google Sheet with this service account (Editor), then copy it here"
-            className="hidden sm:flex items-center gap-2 text-xs bg-white/5 hover:bg-white/10 text-white/70 hover:text-white px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/20 transition-all max-w-88"
+            className="hidden sm:flex items-center gap-2 text-xs bg-white/8 hover:bg-white/14 text-white/75 hover:text-white px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/20 transition-colors max-w-88"
           >
-            <svg className="w-3.5 h-3.5 shrink-0 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5 shrink-0 text-white/45" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.206" />
             </svg>
             <span className="font-mono truncate">{SERVICE_ACCOUNT_EMAIL}</span>
-            <span className="shrink-0 text-white/40">
+            <span className="shrink-0">
               {copied ? (
                 <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                 </svg>
               ) : (
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 text-white/45" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                     d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
@@ -124,45 +124,45 @@ export default function HomePage() {
           </button>
           <button
             onClick={handleSignOut}
-            className="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg font-medium border border-white/10 hover:border-white/20 transition-all"
+            className="text-xs bg-white/10 hover:bg-white/16 text-white px-3 py-1.5 rounded-lg font-medium border border-white/10 hover:border-white/20 transition-colors"
           >
             Sign out
           </button>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-10">
+      <main className="max-w-7xl mx-auto px-6 py-12">
 
         {/* ── SHEET CONFIG ── */}
         {phase === "sheet_config" && (
           <div className="max-w-md mx-auto">
             <div className="mb-6">
-              <h2 className="text-2xl font-bold text-black tracking-tight">Connect your sheet</h2>
-              <p className="text-sm text-black/50 mt-1">Paste in the Google Sheet ID and the tab name to get started.</p>
+              <h2 className="text-2xl font-bold text-ink tracking-tight text-balance">Connect your sheet</h2>
+              <p className="text-base text-muted mt-1.5">Paste in the Google Sheet ID and tab name to get started.</p>
             </div>
 
             {/* Share-access reminder — the service account needs Editor access first */}
-            <div className="mb-6 bg-blue-50 border border-blue-100 rounded-2xl p-5">
+            <div className="mb-5 bg-accent-soft border border-accent/15 rounded-2xl p-5">
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-8 h-8 rounded-lg bg-accent/12 flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-blue-900">First, share your sheet with the app</p>
-                  <p className="text-xs text-blue-800/70 mt-1 leading-relaxed">
-                    In Google Sheets, click <span className="font-semibold">Share</span> and give this service account{" "}
-                    <span className="font-semibold">Editor</span>{" "}
-                    access. Without it, the app can&apos;t read or update your sheet.
+                  <p className="text-base font-semibold text-ink">First, share your sheet with the app</p>
+                  <p className="text-sm text-muted mt-1 leading-relaxed">
+                    In Google Sheets, click <span className="font-medium text-ink">Share</span> and give this service account{" "}
+                    <span className="font-medium text-ink">Editor</span>{" "}
+                    access — otherwise the app can&apos;t read or update your sheet.
                   </p>
                   <button
                     type="button"
                     onClick={copyEmail}
-                    className="mt-3 w-full flex items-center justify-between gap-2 bg-white border border-blue-200 rounded-xl px-3 py-2 text-left hover:border-blue-300 transition-all group"
+                    className="mt-3 w-full flex items-center justify-between gap-2 bg-surface border border-accent/20 rounded-xl px-3 py-2 text-left hover:border-accent/40 transition-colors"
                   >
-                    <span className="font-mono text-xs text-blue-900 truncate">{SERVICE_ACCOUNT_EMAIL}</span>
-                    <span className={`shrink-0 flex items-center gap-1 text-xs font-semibold ${copied ? "text-emerald-600" : "text-blue-600"}`}>
+                    <span className="font-mono text-sm text-ink truncate">{SERVICE_ACCOUNT_EMAIL}</span>
+                    <span className={`shrink-0 flex items-center gap-1 text-xs font-semibold ${copied ? "text-success" : "text-accent"}`}>
                       {copied ? (
                         <>
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -185,43 +185,43 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-black/8 shadow-sm p-8">
+            <div className="bg-surface rounded-2xl border border-line shadow-card p-8">
               <form onSubmit={handleConnect} className="space-y-5">
                 <div>
-                  <label className="block text-sm font-semibold text-black mb-1.5">Sheet ID or URL</label>
+                  <label className="block text-base font-medium text-ink mb-1.5">Sheet ID or URL</label>
                   <input
                     type="text"
                     value={sheetId}
                     onChange={handleSheetIdInput}
                     placeholder="Paste the Sheet ID or the full Google Sheets URL"
-                    className="w-full px-3.5 py-2.5 border border-black/15 rounded-xl text-sm font-mono text-black placeholder:text-black/25 focus:outline-none focus:ring-2 focus:ring-black/20 focus:border-black/30 transition-all"
+                    className="w-full px-4 py-2.5 bg-surface border border-line rounded-xl text-base font-mono text-ink placeholder:text-faint/60 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition-all"
                     required
                   />
-                  <p className="mt-1.5 text-xs text-black/40">You can paste the full URL — the ID will be extracted automatically.</p>
+                  <p className="mt-1.5 text-sm text-faint">Paste the full URL — the ID is extracted automatically.</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-black mb-1.5">Tab name</label>
+                  <label className="block text-base font-medium text-ink mb-1.5">Tab name</label>
                   <input
                     type="text"
                     value={tabName}
                     onChange={(e) => setTabName(e.target.value)}
                     placeholder="Sheet1"
-                    className="w-full px-3.5 py-2.5 border border-black/15 rounded-xl text-sm text-black placeholder:text-black/25 focus:outline-none focus:ring-2 focus:ring-black/20 focus:border-black/30 transition-all"
+                    className="w-full px-4 py-2.5 bg-surface border border-line rounded-xl text-base text-ink placeholder:text-faint/60 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition-all"
                     required
                   />
                 </div>
                 {connectError && (
-                  <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
-                    <svg className="w-4 h-4 text-red-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="flex items-start gap-2 p-3 bg-danger/8 border border-danger/15 rounded-xl">
+                    <svg className="w-4 h-4 text-danger mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <p className="text-sm text-red-600">{connectError}</p>
+                    <p className="text-base text-danger">{connectError}</p>
                   </div>
                 )}
                 <button
                   type="submit"
                   disabled={connecting}
-                  className="w-full bg-black text-white py-2.5 rounded-xl text-sm font-semibold hover:bg-black/80 disabled:opacity-40 transition-all"
+                  className="w-full bg-ink text-white py-2.5 rounded-xl text-base font-medium hover:bg-ink/90 disabled:opacity-40 transition-colors"
                 >
                   {connecting ? "Connecting…" : "Connect to sheet"}
                 </button>
@@ -232,47 +232,57 @@ export default function HomePage() {
 
         {/* ── HOME ── */}
         {phase === "home" && (
-          <div className="max-w-xl mx-auto">
-            <div className="mb-8 flex items-start justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-black tracking-tight">What would you like to do?</h2>
-                <p className="text-sm text-black/50 mt-1">{sheetTitle || sheetId}</p>
+          <div className="max-w-2xl mx-auto">
+            <div className="mb-8 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h2 className="text-2xl font-bold text-ink tracking-tight">What would you like to do?</h2>
+                <p className="text-base text-muted mt-1.5 truncate">Connected to <span className="text-ink font-medium">{sheetTitle || sheetId}</span></p>
               </div>
               <button
                 onClick={handleChangeSheet}
-                className="text-xs bg-white text-black/60 hover:text-black border border-black/15 shadow-sm hover:shadow hover:border-black/25 px-3 py-1.5 rounded-lg font-medium transition-all mt-1"
+                className="shrink-0 text-sm bg-surface text-muted hover:text-ink border border-line hover:border-ink/20 shadow-card px-3.5 py-2 rounded-lg font-medium transition-colors mt-0.5"
               >
                 Change sheet
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid sm:grid-cols-2 gap-4">
               <button
                 onClick={() => router.push("/payment")}
-                className="bg-white border border-black/8 rounded-2xl p-6 text-left shadow-sm hover:shadow hover:border-black/20 transition-all"
+                className="group bg-surface border border-line rounded-2xl p-6 text-left shadow-card hover:border-accent/40 hover:shadow-pop transition-all"
               >
-                <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center mb-4">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-11 h-11 bg-accent-soft rounded-xl flex items-center justify-center mb-4 group-hover:bg-accent/15 transition-colors">
+                  <svg className="w-5.5 h-5.5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                       d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                   </svg>
                 </div>
-                <p className="text-sm font-bold text-black">Payments</p>
-                <p className="text-xs text-black/40 mt-1">Upload bank transactions and update monthly payment amounts</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-md font-semibold text-ink">Payments</p>
+                  <svg className="w-4 h-4 text-faint -translate-x-1 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+                <p className="text-sm text-muted mt-1.5 leading-relaxed">Upload bank statements and post payments into the monthly columns.</p>
               </button>
 
               <button
                 onClick={() => router.push("/pledge")}
-                className="bg-white border border-black/8 rounded-2xl p-6 text-left shadow-sm hover:shadow hover:border-black/20 transition-all"
+                className="group bg-surface border border-line rounded-2xl p-6 text-left shadow-card hover:border-accent/40 hover:shadow-pop transition-all"
               >
-                <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center mb-4">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-11 h-11 bg-accent-soft rounded-xl flex items-center justify-center mb-4 group-hover:bg-accent/15 transition-colors">
+                  <svg className="w-5.5 h-5.5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                       d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
-                <p className="text-sm font-bold text-black">Pledges</p>
-                <p className="text-xs text-black/40 mt-1">Upload Pabbly exports and update the master sheet with new pledges</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-md font-semibold text-ink">Pledges</p>
+                  <svg className="w-4 h-4 text-faint -translate-x-1 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+                <p className="text-sm text-muted mt-1.5 leading-relaxed">Upload Pabbly exports and update the master sheet with new pledges.</p>
               </button>
             </div>
           </div>

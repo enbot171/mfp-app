@@ -26,7 +26,7 @@ function CommitInput({ value, onCommit, mono = false, align = "left" }) {
       onChange={(e) => setText(e.target.value)}
       onBlur={() => { if (text !== String(value ?? "")) onCommit(text); }}
       onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
-      className={`w-full bg-transparent border border-transparent hover:border-black/15 focus:border-black/40 focus:bg-white rounded-md px-1.5 py-1 text-xs text-black outline-none transition-all ${mono ? "font-mono" : ""} ${align === "right" ? "text-right" : ""}`}
+      className={`w-full bg-transparent border border-transparent hover:border-line focus:border-ink/25 focus:bg-surface rounded-md px-1.5 py-1 text-xs text-ink outline-none transition-all ${mono ? "font-mono" : ""} ${align === "right" ? "text-right" : ""}`}
     />
   );
 }
@@ -44,13 +44,13 @@ function AmountCell({ current, next, pledge }) {
   return (
     <div className="flex flex-col gap-0.5 font-mono text-xs">
       {hasExisting && (
-        <span className="text-black/30 line-through">{current.toFixed(2)}</span>
+        <span className="text-faint text-[10px]">Previous {current.toFixed(2)}</span>
       )}
       <span className={fullPay ? "text-emerald-700 font-semibold" : "text-amber-700 font-semibold"}>
         {next.toFixed(2)}
       </span>
       {pledge > 0 && (
-        <span className="text-black/30 text-[10px]">pledge {pledge.toFixed(2)}</span>
+        <span className="text-faint text-[10px]">Pledge {pledge.toFixed(2)} · {fullPay ? "Full" : "Partial"}</span>
       )}
     </div>
   );
@@ -80,7 +80,7 @@ function FilterInput({ placeholder, value, onChange }) {
       placeholder={placeholder}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full px-2 py-1 text-xs border border-white/20 rounded-lg text-black placeholder:text-black/30 focus:outline-none focus:ring-1 focus:ring-white/30 bg-white font-normal normal-case tracking-normal"
+      className="w-full px-2 py-1 text-xs border border-white/20 rounded-lg text-ink placeholder:text-faint/70 focus:outline-none focus:ring-1 focus:ring-white/30 bg-surface font-normal normal-case tracking-normal"
     />
   );
 }
@@ -114,18 +114,18 @@ function CheckboxFilter({ options, selected, onChange, placeholder }) {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between gap-1 px-2 py-1 text-xs border border-white/20 rounded-lg bg-white text-black font-normal overflow-hidden"
+        className="w-full flex items-center justify-between gap-1 px-2 py-1 text-xs border border-white/20 rounded-lg bg-surface text-ink font-normal overflow-hidden"
       >
-        <span className={`truncate ${selected.size === 0 ? "text-black/40" : "text-black"}`}>{summary}</span>
-        <span className="text-black/40 shrink-0">▾</span>
+        <span className={`truncate ${selected.size === 0 ? "text-faint" : "text-ink"}`}>{summary}</span>
+        <span className="text-faint shrink-0">▾</span>
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 bg-white border border-black/10 rounded-lg shadow-lg z-30 min-w-32.5 max-h-60 overflow-auto">
-          {options.length === 0 && <div className="px-3 py-1.5 text-xs text-black/30">None</div>}
+        <div className="absolute top-full left-0 mt-1 bg-surface border border-line rounded-lg shadow-lg z-30 min-w-32.5 max-h-60 overflow-auto">
+          {options.length === 0 && <div className="px-3 py-1.5 text-xs text-faint/70">None</div>}
           {options.map((opt) => (
-            <label key={opt.value} className="flex items-center gap-2 px-3 py-1.5 hover:bg-black/5 cursor-pointer select-none">
-              <input type="checkbox" checked={selected.has(opt.value)} onChange={() => toggle(opt.value)} className="rounded accent-black" />
-              <span className="text-xs text-black whitespace-nowrap">{opt.label}</span>
+            <label key={opt.value} className="flex items-center gap-2 px-3 py-1.5 hover:bg-panel cursor-pointer select-none">
+              <input type="checkbox" checked={selected.has(opt.value)} onChange={() => toggle(opt.value)} className="rounded accent-accent" />
+              <span className="text-xs text-ink whitespace-nowrap">{opt.label}</span>
             </label>
           ))}
         </div>
@@ -294,20 +294,20 @@ export default function PaymentPreviewTable({
       )}
 
       {/* Summary bar */}
-      <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-black/8 shrink-0">
-        <span className="text-sm font-semibold text-black">{visible.length} rows</span>
-        <span className="text-black/20">·</span>
-        <span className="text-sm text-black"><span className="font-semibold text-emerald-700">{matched.length}</span> matched</span>
+      <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-line shrink-0">
+        <span className="text-sm font-semibold text-ink">{visible.length} rows</span>
+        <span className="text-faint/55">·</span>
+        <span className="text-sm text-ink"><span className="font-semibold text-emerald-700">{matched.length}</span> matched</span>
         {errors.length > 0 && (
-          <span className="text-sm text-black"><span className="font-semibold text-red-600">{errors.length}</span> error{errors.length !== 1 ? "s" : ""}</span>
+          <span className="text-sm text-ink"><span className="font-semibold text-red-600">{errors.length}</span> error{errors.length !== 1 ? "s" : ""}</span>
         )}
         {duplicateCount > 0 && (
-          <span className="text-sm text-black/40">{duplicateCount} duplicate{duplicateCount !== 1 ? "s" : ""} skipped</span>
+          <span className="text-sm text-faint">{duplicateCount} duplicate{duplicateCount !== 1 ? "s" : ""} skipped</span>
         )}
         {hasFilters && (
           <>
-            <span className="text-sm text-black/50">— {filtered.length} shown</span>
-            <button onClick={clearFilters} className="text-xs text-black underline">Clear</button>
+            <span className="text-sm text-muted">— {filtered.length} shown</span>
+            <button onClick={clearFilters} className="text-xs text-ink underline">Clear</button>
           </>
         )}
 
@@ -348,7 +348,7 @@ export default function PaymentPreviewTable({
             <button
               onClick={onRevert}
               disabled={reverting}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white border border-black/20 rounded-lg text-black/70 font-medium hover:border-red-300 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-surface border border-ink/15 rounded-lg text-ink/80 font-medium hover:border-red-300 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 transition-all"
             >
               {reverting && (
                 <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -360,7 +360,7 @@ export default function PaymentPreviewTable({
             </button>
           )}
 
-          <span className="text-sm text-black pl-1 border-l border-black/10">
+          <span className="text-sm text-ink pl-1 border-l border-line">
             <span className="font-semibold">{selectedMatchedCount}</span> selected
           </span>
 
@@ -371,7 +371,7 @@ export default function PaymentPreviewTable({
               onPushSelected(rows);
             }}
             disabled={selectedMatchedCount === 0 || pushing}
-            className="flex items-center gap-2 px-4 py-1.5 text-xs bg-black text-white rounded-lg font-semibold hover:bg-black/80 disabled:opacity-30 transition-all"
+            className="flex items-center gap-2 px-4 py-1.5 text-xs bg-ink text-white rounded-lg font-semibold hover:bg-ink/90 disabled:opacity-30 transition-all"
           >
             {pushing ? "Pushing…" : `Push ${selectedMatchedCount} selected`}
           </button>
@@ -399,7 +399,7 @@ export default function PaymentPreviewTable({
       {/* Table */}
       <div className="overflow-auto flex-1 min-h-0">
         <table className="w-full text-xs border-collapse" style={{ minWidth: 1000 }}>
-          <thead className="sticky top-0 z-10 bg-black">
+          <thead className="sticky top-0 z-10 bg-shell">
             <tr>
               <th className="px-4 py-2 w-10 text-left align-middle">
                 <input
@@ -439,7 +439,7 @@ export default function PaymentPreviewTable({
           <tbody className="divide-y divide-black/5">
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-12 text-center text-sm text-black/30">
+                <td colSpan={11} className="px-4 py-12 text-center text-sm text-faint/70">
                   {hasFilters ? "No rows match your filters" : "No rows to show"}
                 </td>
               </tr>
@@ -450,14 +450,14 @@ export default function PaymentPreviewTable({
               const visibleErrors = result.errors.filter((e) => e.severity !== "info");
 
               return (
-                <tr key={result.rowIndex} className={`${meta.rowBg} hover:brightness-95 transition-all`}>
+                <tr key={result.rowIndex} className={`${meta.rowBg} ${isChecked ? "shadow-[inset_3px_0_0_var(--color-accent)]" : ""} hover:brightness-[0.98] transition-colors`}>
                   <td className="px-4 py-3">
                     <input
                       type="checkbox"
                       checked={isChecked}
                       onChange={() => onToggle(result.rowIndex)}
                       disabled={result.matchType !== "matched"}
-                      className="rounded border-black/20 accent-black disabled:opacity-30"
+                      className="rounded border-ink/15 accent-accent disabled:opacity-30"
                     />
                   </td>
                   <td className="px-4 py-3">
@@ -470,26 +470,26 @@ export default function PaymentPreviewTable({
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-black/50 text-xs">
-                    {result.sheetName || <span className="text-black/20">—</span>}
+                  <td className="px-4 py-3 text-muted text-xs">
+                    {result.sheetName || <span className="text-faint/55">—</span>}
                   </td>
-                  <td className="px-4 py-3 font-mono text-black">
-                    {result.mfNumber || <span className="text-black/30">—</span>}
+                  <td className="px-4 py-3 font-mono text-ink">
+                    {result.mfNumber || <span className="text-faint/70">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-black">
-                    {result.name || <span className="text-black/30">—</span>}
+                  <td className="px-4 py-3 text-ink">
+                    {result.name || <span className="text-faint/70">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-black/70">
+                  <td className="px-4 py-3 text-ink/80">
                     {formatDate(result.date)}
                   </td>
-                  <td className="px-4 py-3 font-mono font-semibold text-black">
+                  <td className="px-4 py-3 font-mono font-semibold text-ink">
                     <CommitInput
                       mono
                       value={result.month ?? ""}
                       onCommit={(v) => onEditRow(result.rowIndex, { month: v.trim().toUpperCase() })}
                     />
                   </td>
-                  <td className="px-4 py-3 font-mono text-black">
+                  <td className="px-4 py-3 font-mono text-ink">
                     <CommitInput
                       mono
                       align="right"
@@ -505,12 +505,12 @@ export default function PaymentPreviewTable({
                         pledge={result.pledgeAmount}
                       />
                     ) : (
-                      <span className="text-black/30">—</span>
+                      <span className="text-faint/70">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
                     {visibleErrors.length === 0 ? (
-                      <span className="text-black/30">—</span>
+                      <span className="text-faint/70">—</span>
                     ) : (
                       <div className="flex flex-col gap-1">
                         {visibleErrors.map((e, j) => (
@@ -538,7 +538,7 @@ export default function PaymentPreviewTable({
                       <button
                         onClick={() => onDismissRow(result)}
                         title="Dismiss this row"
-                        className="p-1.5 rounded-lg border border-black/10 text-black/30 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all"
+                        className="p-1.5 rounded-lg border border-line text-faint/70 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all"
                       >
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />

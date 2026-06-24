@@ -7,7 +7,7 @@ import { exportReviewReport, exportAllRegionsSeparate, exportAllRegionsCombined 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS_META = {
-  update: { label: "Update", rowBg: "",                badgeCls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  update: { label: "Update", rowBg: "bg-emerald-50/60", badgeCls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   review: { label: "Review", rowBg: "bg-amber-50/60",  badgeCls: "bg-amber-50 text-amber-700 border-amber-200" },
   new:    { label: "New",    rowBg: "bg-violet-50/50", badgeCls: "bg-violet-50 text-violet-700 border-violet-200" },
   error:  { label: "Error",  rowBg: "bg-red-50/60",    badgeCls: "bg-red-50 text-red-700 border-red-200" },
@@ -84,7 +84,7 @@ function EndCell({ result, colIndex, mono = false, fieldOverrides, onFieldOverri
           <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] opacity-50">▾</span>
         </div>
         {endVal && !hasValue && (
-          <span className="text-[10px] text-black/30 block mt-0.5 truncate">Current: {endVal}</span>
+          <span className="text-[10px] text-faint/70 block mt-0.5 truncate">Current: {endVal}</span>
         )}
       </td>
     );
@@ -106,7 +106,7 @@ function EndCell({ result, colIndex, mono = false, fieldOverrides, onFieldOverri
               className={`text-left px-2 py-1 rounded-lg border text-xs transition-all ${
                 choice === key
                   ? "bg-green-600 text-white border-green-600 font-medium"
-                  : "text-black border-black/15 hover:border-black/40"
+                  : "text-ink border-line hover:border-ink/25"
               }`}
             >
               <span className="text-[10px] opacity-70 block leading-none mb-0.5">{label}</span>
@@ -145,7 +145,7 @@ function EditableInput({ value, onChange, mono = false }) {
       type="text"
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value)}
-      className={`w-full bg-transparent border border-transparent hover:border-black/15 focus:border-black/40 focus:bg-white rounded-md px-1.5 py-1 text-xs text-black outline-none transition-all ${mono ? "font-mono" : ""}`}
+      className={`w-full bg-transparent border border-transparent hover:border-line focus:border-ink/25 focus:bg-surface rounded-md px-1.5 py-1 text-xs text-ink outline-none transition-all ${mono ? "font-mono" : ""}`}
     />
   );
 }
@@ -172,7 +172,7 @@ function FilterInput({ placeholder, value, onChange }) {
       placeholder={placeholder}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full px-2 py-1 text-xs border border-white/20 rounded-lg text-black placeholder:text-black/30 focus:outline-none focus:ring-1 focus:ring-white/30 bg-white font-normal normal-case tracking-normal"
+      className="w-full px-2 py-1 text-xs border border-white/20 rounded-lg text-ink placeholder:text-faint/70 focus:outline-none focus:ring-1 focus:ring-white/30 bg-surface font-normal normal-case tracking-normal"
     />
   );
 }
@@ -206,17 +206,17 @@ function CheckboxFilter({ options, selected, onChange, placeholder }) {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between gap-1 px-2 py-1 text-xs border border-white/20 rounded-lg bg-white text-black font-normal overflow-hidden"
+        className="w-full flex items-center justify-between gap-1 px-2 py-1 text-xs border border-white/20 rounded-lg bg-surface text-ink font-normal overflow-hidden"
       >
-        <span className={`truncate ${selected.size === 0 ? "text-black/40" : "text-black"}`}>{summary}</span>
-        <span className="text-black/40 shrink-0">▾</span>
+        <span className={`truncate ${selected.size === 0 ? "text-faint" : "text-ink"}`}>{summary}</span>
+        <span className="text-faint shrink-0">▾</span>
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 bg-white border border-black/10 rounded-lg shadow-lg z-30 min-w-32.5">
+        <div className="absolute top-full left-0 mt-1 bg-surface border border-line rounded-lg shadow-lg z-30 min-w-32.5">
           {options.map((opt) => (
-            <label key={opt.value} className="flex items-center gap-2 px-3 py-1.5 hover:bg-black/5 cursor-pointer select-none">
-              <input type="checkbox" checked={selected.has(opt.value)} onChange={() => toggle(opt.value)} className="rounded accent-black" />
-              <span className="text-xs text-black">{opt.label}</span>
+            <label key={opt.value} className="flex items-center gap-2 px-3 py-1.5 hover:bg-panel cursor-pointer select-none">
+              <input type="checkbox" checked={selected.has(opt.value)} onChange={() => toggle(opt.value)} className="rounded accent-accent" />
+              <span className="text-xs text-ink">{opt.label}</span>
             </label>
           ))}
         </div>
@@ -282,26 +282,26 @@ function ExportModal({ results, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-ink/55 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col"
+        className="bg-surface rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-black/8">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line">
           <div>
-            <h2 className="text-base font-bold text-black">Export Review Report</h2>
-            <p className="text-xs text-black/50 mt-0.5">
+            <h2 className="text-base font-bold text-ink">Export Review Report</h2>
+            <p className="text-xs text-muted mt-0.5">
               Pick a region to preview one report, or export every region at once ({reviewRegions.length} region{reviewRegions.length !== 1 ? "s" : ""} with review rows).
             </p>
           </div>
-          <button onClick={onClose} className="text-black/40 hover:text-black transition-colors text-lg leading-none">✕</button>
+          <button onClick={onClose} className="text-faint hover:text-ink transition-colors text-lg leading-none">✕</button>
         </div>
 
         {/* Bulk export — all regions */}
         {reviewRegions.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 px-6 py-3 bg-black/2 border-b border-black/8">
-            <span className="text-xs font-medium text-black/50 mr-1">Export all regions:</span>
+          <div className="flex flex-wrap items-center gap-2 px-6 py-3 bg-panel border-b border-line">
+            <span className="text-xs font-medium text-muted mr-1">Export all regions:</span>
             <button
               onClick={handleExportSeparate}
               className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-all"
@@ -318,10 +318,10 @@ function ExportModal({ results, onClose }) {
         )}
 
         {/* Region selector */}
-        <div className="px-6 py-4 border-b border-black/8">
-          <label className="block text-sm font-semibold text-black mb-2">Region</label>
+        <div className="px-6 py-4 border-b border-line">
+          <label className="block text-sm font-semibold text-ink mb-2">Region</label>
           {reviewRegions.length === 0 ? (
-            <p className="text-sm text-black/40">No review rows to export.</p>
+            <p className="text-sm text-faint">No review rows to export.</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {reviewRegions.map((r) => (
@@ -330,8 +330,8 @@ function ExportModal({ results, onClose }) {
                   onClick={() => setExportRegion(r)}
                   className={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-all ${
                     exportRegion === r
-                      ? "bg-black text-white border-black"
-                      : "text-black border-black/15 hover:border-black/40"
+                      ? "bg-ink text-white border-ink"
+                      : "text-ink border-line hover:border-ink/25"
                   }`}
                 >
                   {r}
@@ -344,49 +344,49 @@ function ExportModal({ results, onClose }) {
         {/* Preview */}
         <div className="flex-1 overflow-auto px-6 py-4">
           {!exportRegion ? (
-            <p className="text-sm text-black/30 text-center py-8">Select a region above to preview the report</p>
+            <p className="text-sm text-faint/70 text-center py-8">Select a region above to preview the report</p>
           ) : previewRows.length === 0 ? (
-            <p className="text-sm text-black/30 text-center py-8">No mismatches to export for {exportRegion}</p>
+            <p className="text-sm text-faint/70 text-center py-8">No mismatches to export for {exportRegion}</p>
           ) : (
             <>
-              <p className="text-xs text-black/50 mb-3">
-                <span className="font-semibold text-black">{exportRows.length}</span> people ·{" "}
-                <span className="font-semibold text-black">{previewRows.length}</span> mismatch{previewRows.length !== 1 ? "es" : ""} — this is what the reviewer will see:
+              <p className="text-xs text-muted mb-3">
+                <span className="font-semibold text-ink">{exportRows.length}</span> people ·{" "}
+                <span className="font-semibold text-ink">{previewRows.length}</span> mismatch{previewRows.length !== 1 ? "es" : ""} — this is what the reviewer will see:
               </p>
-              <div className="rounded-xl border border-black/10 overflow-hidden">
+              <div className="rounded-xl border border-line overflow-hidden">
                 <table className="w-full text-xs">
-                  <thead className="bg-black/5 border-b border-black/8">
+                  <thead className="bg-panel border-b border-line">
                     <tr>
                       {["MF No.", "Ref", "Full Name", "Field", "Current", "New", "Decision"].map((h) => (
-                        <th key={h} className="px-3 py-2 text-left font-semibold text-black uppercase tracking-wider text-xs">{h}</th>
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-ink uppercase tracking-wider text-xs">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black/5">
                     {previewRows.map((row, i) => (
-                      <tr key={i} className="hover:bg-black/2">
-                        <td className="px-3 py-2 font-mono text-black">{row.mf}</td>
-                        <td className="px-3 py-2 font-mono text-black/50">{row.ref || "—"}</td>
-                        <td className="px-3 py-2 text-black">{row.name}</td>
-                        <td className="px-3 py-2 text-black/60">{row.field}</td>
-                        <td className="px-3 py-2 text-black">{row.old || <span className="text-black/30">—</span>}</td>
-                        <td className="px-3 py-2 text-black">{row.next || <span className="text-black/30">—</span>}</td>
+                      <tr key={i} className="hover:bg-panel">
+                        <td className="px-3 py-2 font-mono text-ink">{row.mf}</td>
+                        <td className="px-3 py-2 font-mono text-muted">{row.ref || "—"}</td>
+                        <td className="px-3 py-2 text-ink">{row.name}</td>
+                        <td className="px-3 py-2 text-muted">{row.field}</td>
+                        <td className="px-3 py-2 text-ink">{row.old || <span className="text-faint/70">—</span>}</td>
+                        <td className="px-3 py-2 text-ink">{row.next || <span className="text-faint/70">—</span>}</td>
                         <td className="px-3 py-2">
-                          <span className="text-black/25 italic">Current / New</span>
+                          <span className="text-faint/65 italic">Current / New</span>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-black/40 mt-2">Three hidden columns (_mfNumber, _refNo, _field) are included for re-import. Do not delete rows.</p>
+              <p className="text-xs text-faint mt-2">Three hidden columns (_mfNumber, _refNo, _field) are included for re-import. Do not delete rows.</p>
             </>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-black/8">
-          <button onClick={onClose} className="px-4 py-2 text-sm border border-black/15 rounded-xl text-black hover:bg-black/5 transition-all">Cancel</button>
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-line">
+          <button onClick={onClose} className="px-4 py-2 text-sm border border-line rounded-xl text-ink hover:bg-panel transition-all">Cancel</button>
           <button
             onClick={handleExport}
             disabled={!exportRegion || previewRows.length === 0}
@@ -492,18 +492,18 @@ export default function PreviewTable({
 
       <div className="flex flex-col h-full">
         {/* Summary bar */}
-        <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-black/8 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-line shrink-0">
           {/* Counts */}
-          <span className="text-sm font-semibold text-black">{results.length} rows</span>
-          <span className="text-black/20">·</span>
-          <span className="text-sm text-black"><span className="font-semibold text-emerald-700">{counts.update}</span> clean</span>
-          {counts.review > 0 && <span className="text-sm text-black"><span className="font-semibold text-amber-600">{counts.review}</span> review</span>}
-          <span className="text-sm text-black"><span className="font-semibold text-violet-700">{counts.new}</span> new</span>
-          {counts.error > 0 && <span className="text-sm text-black"><span className="font-semibold text-red-600">{counts.error}</span> errors</span>}
+          <span className="text-sm font-semibold text-ink">{results.length} rows</span>
+          <span className="text-faint/55">·</span>
+          <span className="text-sm text-ink"><span className="font-semibold text-emerald-700">{counts.update}</span> clean</span>
+          {counts.review > 0 && <span className="text-sm text-ink"><span className="font-semibold text-amber-600">{counts.review}</span> review</span>}
+          <span className="text-sm text-ink"><span className="font-semibold text-violet-700">{counts.new}</span> new</span>
+          {counts.error > 0 && <span className="text-sm text-ink"><span className="font-semibold text-red-600">{counts.error}</span> errors</span>}
           {hasFilters && (
             <>
-              <span className="text-sm text-black/50">— {filtered.length} shown</span>
-              <button onClick={clearFilters} className="text-xs text-black underline">Clear</button>
+              <span className="text-sm text-muted">— {filtered.length} shown</span>
+              <button onClick={clearFilters} className="text-xs text-ink underline">Clear</button>
             </>
           )}
 
@@ -563,7 +563,7 @@ export default function PreviewTable({
               </button>
             )}
 
-            <span className="text-sm text-black pl-1 border-l border-black/10">
+            <span className="text-sm text-ink pl-1 border-l border-line">
               <span className="font-semibold">{selected.size}</span> selected
             </span>
           </div>
@@ -572,7 +572,7 @@ export default function PreviewTable({
         {/* Scrollable table */}
         <div className="overflow-auto flex-1 min-h-0">
           <table className="w-full text-xs border-collapse" style={{ minWidth: 1100 }}>
-            <thead className="sticky top-0 z-10 bg-black">
+            <thead className="sticky top-0 z-10 bg-shell">
               <tr>
                 <th className="px-4 py-2 w-10 text-left align-middle">
                   <input
@@ -614,7 +614,7 @@ export default function PreviewTable({
 
             <tbody className="divide-y divide-black/5">
               {filtered.length === 0 && (
-                <tr><td colSpan={12} className="px-4 py-12 text-center text-sm text-black/30">No rows match your filters</td></tr>
+                <tr><td colSpan={12} className="px-4 py-12 text-center text-sm text-faint/70">No rows match your filters</td></tr>
               )}
               {filtered.map((result) => {
                 const { matchType, errors } = result;
@@ -625,14 +625,14 @@ export default function PreviewTable({
                 const isAdd        = result.pabblyRow.isAdditional;
 
                 return (
-                  <tr key={result.pabblyIndex} className={`${meta.rowBg} hover:brightness-95 transition-all`}>
+                  <tr key={result.pabblyIndex} className={`${meta.rowBg} ${isChecked ? "shadow-[inset_3px_0_0_var(--color-accent)]" : ""} hover:brightness-[0.98] transition-colors`}>
                     <td className="px-4 py-3">
-                      <input type="checkbox" checked={isChecked} onChange={() => onToggle(result.pabblyIndex)} className="rounded border-black/20 accent-black" />
+                      <input type="checkbox" checked={isChecked} onChange={() => onToggle(result.pabblyIndex)} className="rounded border-ink/15 accent-accent" />
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded-md text-xs font-semibold border ${meta.badgeCls}`}>{meta.label}</span>
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-black">
+                    <td className="px-4 py-3 font-mono text-xs text-ink">
                       <EditableInput
                         mono
                         value={fieldOverrideVal(fieldOverrides, result.pabblyIndex, MASTER_COLS.MF_NUMBER, result.outputRow[MASTER_COLS.MF_NUMBER])}
@@ -651,19 +651,19 @@ export default function PreviewTable({
                       />
                     </td>
                     <td className="px-4 py-3 font-mono text-xs">
-                      {isAdd && masterPledge && (
-                        <span className="block leading-none mb-0.5 text-black/30 line-through">{masterPledge}</span>
-                      )}
                       <EditableInput
                         mono
                         value={fieldOverrideVal(fieldOverrides, result.pabblyIndex, MASTER_COLS.PLEDGE_AMOUNT, pledgeVal)}
                         onChange={(v) => onFieldOverride(result.pabblyIndex, MASTER_COLS.PLEDGE_AMOUNT, v)}
                       />
+                      {isAdd && masterPledge && (
+                        <span className="block leading-none mt-0.5 text-faint/70 line-through">{masterPledge}</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-1">
                         {errors.length === 0
-                          ? <span className="text-black/30 text-xs">—</span>
+                          ? <span className="text-faint/70 text-xs">—</span>
                           : errors.map((e, j) => <ErrorBadge key={j} code={e.code} message={e.message} severity={e.severity} />)}
                       </div>
                     </td>
@@ -692,7 +692,7 @@ export default function PreviewTable({
                         <button
                           onClick={() => onRemoveRows([result])}
                           title="Remove from queue"
-                          className="p-1.5 rounded-lg border border-black/10 text-black/30 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all"
+                          className="p-1.5 rounded-lg border border-line text-faint/70 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all"
                         >
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />

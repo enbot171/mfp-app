@@ -43,3 +43,5 @@ next-env.d.ts
 # test files
 *.xlsx
 *.csv
+# Claude Code local tooling/config
+.claude/

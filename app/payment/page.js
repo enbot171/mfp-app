@@ -94,27 +94,27 @@ function deserializePaymentQueue(rawRows) {
 
 function PaymentLogTable({ rows }) {
   if (rows.length === 0) {
-    return <div className="text-center py-16 text-black/30 text-sm">No payments in log</div>;
+    return <div className="text-center py-16 text-faint/70 text-sm">No payments in log</div>;
   }
   return (
     <div className="overflow-auto">
       <table className="w-full text-sm border-collapse">
         <thead>
-          <tr className="border-b border-black/8 bg-black/[0.02]">
+          <tr className="border-b border-line bg-panel">
             {["MF No.", "Month", "Date", "Amount", "Source", "Pushed At"].map((h) => (
-              <th key={h} className="text-left px-4 py-3 font-semibold text-black/60 text-xs whitespace-nowrap">{h}</th>
+              <th key={h} className="text-left px-4 py-3 font-semibold text-muted text-xs whitespace-nowrap">{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={`${r.fingerprint}-${i}`} className="border-b border-black/5 hover:bg-black/[0.02] transition-colors">
-              <td className="px-4 py-3 font-mono text-xs text-black font-semibold">{r.mfNo || "—"}</td>
-              <td className="px-4 py-3 text-black/70">{r.month || "—"}</td>
-              <td className="px-4 py-3 text-black/70 whitespace-nowrap">{r.date || "—"}</td>
-              <td className="px-4 py-3 text-black font-medium">{r.amount ? `$${r.amount}` : "—"}</td>
-              <td className="px-4 py-3 text-black/50 text-xs">{r.source || "—"}</td>
-              <td className="px-4 py-3 text-black/40 text-xs whitespace-nowrap">
+            <tr key={`${r.fingerprint}-${i}`} className="border-b border-line hover:bg-panel transition-colors">
+              <td className="px-4 py-3 font-mono text-xs text-ink font-semibold">{r.mfNo || "—"}</td>
+              <td className="px-4 py-3 text-ink/80">{r.month || "—"}</td>
+              <td className="px-4 py-3 text-ink/80 whitespace-nowrap">{r.date || "—"}</td>
+              <td className="px-4 py-3 text-ink font-medium">{r.amount ? `$${r.amount}` : "—"}</td>
+              <td className="px-4 py-3 text-muted text-xs">{r.source || "—"}</td>
+              <td className="px-4 py-3 text-faint text-xs whitespace-nowrap">
                 {r.pushedAt ? new Date(r.pushedAt).toLocaleString() : "—"}
               </td>
             </tr>
@@ -683,12 +683,12 @@ export default function PaymentPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5]">
-      <header className="bg-black px-6 py-4 flex items-center justify-between">
+    <div className="min-h-screen bg-canvas">
+      <header className="bg-shell px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push("/")}
-            className="w-7 h-7 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center transition-all"
+            className="w-7 h-7 bg-surface/10 hover:bg-surface/20 rounded-lg flex items-center justify-center transition-all"
           >
             <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -702,7 +702,7 @@ export default function PaymentPage() {
         {phase === PHASES.PREVIEW && (
           <button
             onClick={resetToLog}
-            className="text-xs bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg font-medium border border-white/10 transition-all"
+            className="text-xs bg-surface/10 hover:bg-surface/20 text-white px-3 py-1.5 rounded-lg font-medium border border-white/10 transition-all"
           >
             View Payment History
           </button>
@@ -713,7 +713,7 @@ export default function PaymentPage() {
 
         {/* ── LOADING ── */}
         {phase === PHASES.LOADING && (
-          <div className="flex items-center justify-center py-20 gap-2 text-black/40">
+          <div className="flex items-center justify-center py-20 gap-2 text-faint">
             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
@@ -727,8 +727,8 @@ export default function PaymentPage() {
           <div>
             <div className="flex items-start justify-between mb-6">
               <div>
-                <h2 className="text-2xl font-bold text-black tracking-tight">Payment History</h2>
-                <p className="text-sm text-black/50 mt-1">
+                <h2 className="text-2xl font-bold text-ink tracking-tight">Payment History</h2>
+                <p className="text-sm text-muted mt-1">
                   {logRows.length > 0
                     ? `${logRows.length} transaction${logRows.length !== 1 ? "s" : ""} pushed`
                     : "No payments pushed yet"}
@@ -736,7 +736,7 @@ export default function PaymentPage() {
               </div>
               <button
                 onClick={() => setPhase(PHASES.UPLOAD)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-black text-white text-sm font-semibold rounded-xl hover:bg-black/80 transition-all"
+                className="flex items-center gap-2 px-4 py-2.5 bg-ink text-white text-sm font-semibold rounded-xl hover:bg-ink/90 transition-all"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -755,9 +755,9 @@ export default function PaymentPage() {
             )}
 
             {logLoading ? (
-              <div className="bg-white rounded-2xl border border-black/8 shadow-sm p-12 text-center text-black/30 text-sm">Loading…</div>
+              <div className="bg-surface rounded-2xl border border-line shadow-sm p-12 text-center text-faint/70 text-sm">Loading…</div>
             ) : (
-              <div className="bg-white rounded-2xl border border-black/8 shadow-sm overflow-hidden">
+              <div className="bg-surface rounded-2xl border border-line shadow-sm overflow-hidden">
                 <PaymentLogTable rows={logRows} />
               </div>
             )}
@@ -770,31 +770,31 @@ export default function PaymentPage() {
             <div className="mb-8 flex items-center gap-3">
               <button
                 onClick={() => logRows.length > 0 ? setPhase(PHASES.LOG) : router.push("/")}
-                className="w-8 h-8 flex items-center justify-center rounded-xl border border-black/15 hover:border-black/30 bg-white shadow-sm hover:shadow transition-all"
+                className="w-8 h-8 flex items-center justify-center rounded-xl border border-line hover:border-ink/20 bg-surface shadow-sm hover:shadow transition-all"
               >
-                <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-ink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
               <div>
-                <h2 className="text-2xl font-bold text-black tracking-tight">Upload Payment File</h2>
-                <p className="text-sm text-black/50 mt-1">Drag and drop your bank export — you'll pick which week(s) to import next.</p>
+                <h2 className="text-2xl font-bold text-ink tracking-tight">Upload Payment File</h2>
+                <p className="text-sm text-muted mt-1">Drag and drop your bank export — you'll pick which week(s) to import next.</p>
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-black/8 shadow-sm p-6">
+            <div className="bg-surface rounded-2xl border border-line shadow-sm p-6">
               <DropZone onFile={handlePaymentFile} />
             </div>
 
             {paymentStatusMsg && (
               <div className="mt-4 flex items-center justify-center gap-2">
                 {paymentStatusMsg.endsWith("…") && (
-                  <svg className="w-4 h-4 text-black/40 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-faint animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
                 )}
-                <p className="text-sm text-black/50">{paymentStatusMsg}</p>
+                <p className="text-sm text-muted">{paymentStatusMsg}</p>
               </div>
             )}
           </div>
@@ -802,15 +802,15 @@ export default function PaymentPage() {
 
         {/* ── BLOCKING LOADER (while a file is parsed/grouped into weeks) ── */}
         {weekLoading && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl shadow-2xl px-6 py-5 flex items-center gap-3">
-              <svg className="w-5 h-5 text-black/60 animate-spin" fill="none" viewBox="0 0 24 24">
+          <div className="fixed inset-0 bg-ink/45 flex items-center justify-center z-50">
+            <div className="bg-surface rounded-2xl shadow-2xl px-6 py-5 flex items-center gap-3">
+              <svg className="w-5 h-5 text-muted animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
               </svg>
               <div>
-                <p className="text-sm font-semibold text-black">Reading file…</p>
-                <p className="text-xs text-black/50">Grouping transactions by week — please wait.</p>
+                <p className="text-sm font-semibold text-ink">Reading file…</p>
+                <p className="text-xs text-muted">Grouping transactions by week — please wait.</p>
               </div>
             </div>
           </div>
@@ -818,32 +818,32 @@ export default function PaymentPage() {
 
         {/* ── WEEK PICKER MODAL ── */}
         {weekBuckets.length > 0 && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={cancelWeekPicker}>
+          <div className="fixed inset-0 bg-ink/55 flex items-center justify-center z-50 p-4" onClick={cancelWeekPicker}>
             <div
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col"
+              className="bg-surface rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="flex items-start justify-between px-6 py-4 border-b border-black/8">
+              <div className="flex items-start justify-between px-6 py-4 border-b border-line">
                 <div>
-                  <h2 className="text-base font-bold text-black">
+                  <h2 className="text-base font-bold text-ink">
                     {pendingParse?.mode === "add" ? "Choose weeks to add" : "Choose weeks to import"}
                   </h2>
-                  <p className="text-xs text-black/50 mt-0.5">
+                  <p className="text-xs text-muted mt-0.5">
                     This file has {weekBuckets.length} week{weekBuckets.length !== 1 ? "s" : ""} of transactions.
                     {pendingParse?.mode === "add" ? " Selected weeks are added to the preview." : ""} New weeks are pre-selected.
                   </p>
                 </div>
-                <button onClick={cancelWeekPicker} className="text-black/40 hover:text-black transition-colors text-lg leading-none shrink-0">✕</button>
+                <button onClick={cancelWeekPicker} className="text-faint hover:text-ink transition-colors text-lg leading-none shrink-0">✕</button>
               </div>
 
               {/* Quick toggles */}
-              <div className="flex items-center gap-2 px-6 py-2.5 border-b border-black/8 bg-black/2">
-                <button onClick={() => setSelectedWeeks(new Set(weekBuckets.map((w) => w.key)))} className="text-xs font-medium text-black/60 hover:text-black underline">Select all</button>
-                <span className="text-black/20">·</span>
-                <button onClick={() => setSelectedWeeks(new Set(weekBuckets.filter((w) => w.newCount > 0).map((w) => w.key)))} className="text-xs font-medium text-black/60 hover:text-black underline">Only new</button>
-                <span className="text-black/20">·</span>
-                <button onClick={() => setSelectedWeeks(new Set())} className="text-xs font-medium text-black/60 hover:text-black underline">Clear</button>
+              <div className="flex items-center gap-2 px-6 py-2.5 border-b border-line bg-panel">
+                <button onClick={() => setSelectedWeeks(new Set(weekBuckets.map((w) => w.key)))} className="text-xs font-medium text-muted hover:text-ink underline">Select all</button>
+                <span className="text-faint/55">·</span>
+                <button onClick={() => setSelectedWeeks(new Set(weekBuckets.filter((w) => w.newCount > 0).map((w) => w.key)))} className="text-xs font-medium text-muted hover:text-ink underline">Only new</button>
+                <span className="text-faint/55">·</span>
+                <button onClick={() => setSelectedWeeks(new Set())} className="text-xs font-medium text-muted hover:text-ink underline">Clear</button>
               </div>
 
               {/* Week rows */}
@@ -856,7 +856,7 @@ export default function PaymentPage() {
                     : w.newCount === 0 ? `all ${seen}`
                     : `${w.newCount} new · ${present} ${pendingParse?.mode === "add" ? "in preview" : "pushed"}`;
                   return (
-                    <label key={w.key} className="flex items-center gap-3 px-6 py-3 hover:bg-black/2 cursor-pointer select-none">
+                    <label key={w.key} className="flex items-center gap-3 px-6 py-3 hover:bg-panel cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={checked}
@@ -865,34 +865,34 @@ export default function PaymentPage() {
                           if (n.has(w.key)) n.delete(w.key); else n.add(w.key);
                           return n;
                         })}
-                        className="rounded border-black/25 accent-black"
+                        className="rounded border-ink/15 accent-black"
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-black">
-                          {w.label}{w.year ? <span className="font-normal text-black/40"> {w.year}</span> : null}
+                        <div className="text-sm font-semibold text-ink">
+                          {w.label}{w.year ? <span className="font-normal text-faint"> {w.year}</span> : null}
                         </div>
-                        <div className="text-xs text-black/45">{w.total} transaction{w.total !== 1 ? "s" : ""}</div>
+                        <div className="text-xs text-faint">{w.total} transaction{w.total !== 1 ? "s" : ""}</div>
                       </div>
-                      <span className={`text-xs font-medium shrink-0 ${w.newCount === 0 ? "text-black/30" : "text-emerald-700"}`}>{tag}</span>
+                      <span className={`text-xs font-medium shrink-0 ${w.newCount === 0 ? "text-faint/70" : "text-emerald-700"}`}>{tag}</span>
                     </label>
                   );
                 })}
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-black/8">
-                <p className="text-sm text-black/50">
+              <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-line">
+                <p className="text-sm text-muted">
                   {(() => {
                     const rows = weekBuckets.filter((w) => selectedWeeks.has(w.key)).reduce((n, w) => n + w.total, 0);
                     return `${selectedWeeks.size} week${selectedWeeks.size !== 1 ? "s" : ""} · ${rows} transaction${rows !== 1 ? "s" : ""}`;
                   })()}
                 </p>
                 <div className="flex items-center gap-2">
-                  <button onClick={cancelWeekPicker} className="px-4 py-2 text-sm border border-black/15 rounded-xl text-black hover:bg-black/5 transition-all">Cancel</button>
+                  <button onClick={cancelWeekPicker} className="px-4 py-2 text-sm border border-line rounded-xl text-ink hover:bg-panel transition-all">Cancel</button>
                   <button
                     onClick={handleImportWeeks}
                     disabled={selectedWeeks.size === 0}
-                    className="px-5 py-2 text-sm bg-black text-white rounded-xl font-semibold hover:bg-black/80 disabled:opacity-30 transition-all"
+                    className="px-5 py-2 text-sm bg-ink text-white rounded-xl font-semibold hover:bg-ink/90 disabled:opacity-30 transition-all"
                   >
                     {pendingParse?.mode === "add" ? "Add selected →" : "Import selected →"}
                   </button>
@@ -907,21 +907,21 @@ export default function PaymentPage() {
           <div className="flex flex-col" style={{ height: "calc(100vh - 136px)" }}>
             <div className="flex items-center justify-between mb-4 shrink-0">
               <div>
-                <h2 className="text-xl font-bold text-black tracking-tight">Review payments</h2>
-                <p className="text-sm text-black/50 mt-0.5">Check each row before updating Google Sheets.</p>
+                <h2 className="text-xl font-bold text-ink tracking-tight">Review payments</h2>
+                <p className="text-sm text-muted mt-0.5">Check each row before updating Google Sheets.</p>
               </div>
               <div className="flex items-center gap-3">
                 <div className="relative group">
                   <button
                     onClick={() => addFileInputRef.current?.click()}
-                    className="px-4 py-2 text-sm bg-white border border-black/20 rounded-xl text-black font-medium shadow-sm hover:shadow hover:border-black/30 transition-all flex items-center gap-2"
+                    className="px-4 py-2 text-sm bg-surface border border-ink/15 rounded-xl text-ink font-medium shadow-sm hover:shadow hover:border-ink/20 transition-all flex items-center gap-2"
                   >
-                    <svg className="w-3.5 h-3.5 text-black/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
                     Add file
                   </button>
-                  <div className="absolute right-0 top-full mt-2 w-72 bg-black text-white text-xs rounded-xl p-3 shadow-xl hidden group-hover:block z-50 leading-relaxed">
+                  <div className="absolute right-0 top-full mt-2 w-72 bg-ink text-white text-xs rounded-xl p-3 shadow-xl hidden group-hover:block z-50 leading-relaxed">
                     <p className="font-semibold mb-1">Add another bank export</p>
                     <p className="text-white/60">New transactions are merged into the current preview. Transactions already shown (same fingerprint) are skipped.</p>
                   </div>
@@ -936,14 +936,14 @@ export default function PaymentPage() {
                 {paymentAddSnapshot && (
                   <button
                     onClick={handleUndoAddPayment}
-                    className="px-4 py-2 text-sm bg-white border border-amber-200 rounded-xl text-amber-700 font-medium shadow-sm hover:bg-amber-50 hover:border-amber-300 transition-all"
+                    className="px-4 py-2 text-sm bg-surface border border-amber-200 rounded-xl text-amber-700 font-medium shadow-sm hover:bg-amber-50 hover:border-amber-300 transition-all"
                   >
                     Undo last add
                   </button>
                 )}
                 <button
                   onClick={handleDiscardFile}
-                  className="px-4 py-2 text-sm bg-white border border-black/20 rounded-xl text-black/60 font-medium shadow-sm hover:bg-black/5 hover:border-black/30 transition-all"
+                  className="px-4 py-2 text-sm bg-surface border border-ink/15 rounded-xl text-muted font-medium shadow-sm hover:bg-panel hover:border-ink/20 transition-all"
                 >
                   Discard file
                 </button>
@@ -951,7 +951,7 @@ export default function PaymentPage() {
             </div>
 
             {paymentAddMsg && (
-              <div className="mb-3 flex items-center gap-2 p-3 bg-black/5 border border-black/10 rounded-xl text-sm text-black/60 shrink-0">
+              <div className="mb-3 flex items-center gap-2 p-3 bg-panel border border-line rounded-xl text-sm text-muted shrink-0">
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -960,7 +960,7 @@ export default function PaymentPage() {
             )}
 
             {paymentStatusMsg && (
-              <div className="mb-3 flex items-center gap-2 p-3 bg-black/5 border border-black/10 rounded-xl text-sm text-black/60 shrink-0">
+              <div className="mb-3 flex items-center gap-2 p-3 bg-panel border border-line rounded-xl text-sm text-muted shrink-0">
                 <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
@@ -969,7 +969,7 @@ export default function PaymentPage() {
               </div>
             )}
 
-            <div className="bg-white rounded-2xl border border-black/8 shadow-sm overflow-hidden flex-1 min-h-0">
+            <div className="bg-surface rounded-2xl border border-line shadow-sm overflow-hidden flex-1 min-h-0">
               <PaymentPreviewTable
                 results={paymentResults}
                 selected={paymentSelected}
