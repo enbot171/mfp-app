@@ -477,7 +477,11 @@ export default function PaymentPreviewTable({
                     {result.mfNumber || <span className="text-faint/70">—</span>}
                   </td>
                   <td className="px-4 py-3 text-ink">
-                    {result.name || <span className="text-faint/70">—</span>}
+                    {result.name
+                      ? result.name
+                      : result.description
+                        ? <span className="text-muted" title={result.description}>{result.description}</span>
+                        : <span className="text-faint/70">—</span>}
                   </td>
                   <td className="px-4 py-3 text-ink/80">
                     {formatDate(result.date)}
