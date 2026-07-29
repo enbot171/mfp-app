@@ -20,7 +20,7 @@ function getConfig() {
 export default function HomePage() {
   const [phase,        setPhase]        = useState("sheet_config"); // "sheet_config" | "home"
   const [sheetId,      setSheetId]      = useState("");
-  const [tabName,      setTabName]      = useState("Sheet1");
+  const [tabName,      setTabName]      = useState("Master");
   const [sheetTitle,   setSheetTitle]   = useState("");
   const [connectError, setConnectError] = useState(null);
   const [connecting,   setConnecting]   = useState(false);
@@ -40,7 +40,7 @@ export default function HomePage() {
     const { sheetId: sid, tabName: tab, sheetTitle: title } = getConfig();
     if (sid) {
       setSheetId(sid);
-      setTabName(tab ?? "Sheet1");
+      setTabName(tab ?? "Master");
       setSheetTitle(title ?? "");
       setPhase("home");
     }
@@ -121,6 +121,12 @@ export default function HomePage() {
                 </svg>
               )}
             </span>
+          </button>
+          <button
+            onClick={() => router.push("/help")}
+            className="text-xs bg-white/10 hover:bg-white/16 text-white px-3 py-1.5 rounded-lg font-medium border border-white/10 hover:border-white/20 transition-colors"
+          >
+            How to use
           </button>
           <button
             onClick={handleSignOut}
@@ -205,7 +211,7 @@ export default function HomePage() {
                     type="text"
                     value={tabName}
                     onChange={(e) => setTabName(e.target.value)}
-                    placeholder="Sheet1"
+                    placeholder="Master"
                     className="w-full px-4 py-2.5 bg-surface border border-line rounded-xl text-base text-ink placeholder:text-faint/60 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 transition-all"
                     required
                   />

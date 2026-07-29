@@ -1,6 +1,24 @@
 "use client";
 import { useState, useMemo, useRef, useEffect } from "react";
 import ErrorBadge from "./ErrorBadge";
+import { useColumnWidths, ResizeHandle } from "./useColumnWidths";
+
+// Column layout — widths are defaults; drag any column edge to resize (persisted per browser).
+const COLUMNS = [
+  { key: "select",   width:  44, min:  44 },
+  { key: "status",   width: 100, min:  80 },
+  { key: "source",   width: 150, min:  90 },
+  { key: "mf",       width: 130, min:  90 },
+  { key: "name",     width: 200, min: 110 },
+  { key: "date",     width: 120, min:  90 },
+  { key: "month",    width:  80, min:  64 },
+  { key: "amount",   width: 110, min:  80 },
+  { key: "newTotal", width: 150, min: 110 },
+  { key: "issues",   width: 220, min: 120 },
+  { key: "actions",  width:  76, min:  68 },
+];
+
+const COL_WIDTH_STORAGE_KEY = "mfp.paymentTable.colWidths";
 
 const STATUS_META = {
   matched: { label: "Matched", badgeCls: "bg-emerald-50 text-emerald-700 border-emerald-200", rowBg: "" },
@@ -164,6 +182,7 @@ export default function PaymentPreviewTable({
   const [filterName,     setFilterName]     = useState("");
   const [sortCol,        setSortCol]        = useState(null);
   const [sortDir,        setSortDir]        = useState("asc");
+  const { widths, startResize, resetWidths, totalWidth } = useColumnWidths(COL_WIDTH_STORAGE_KEY, COLUMNS);
 
   function handleSort(col) {
     if (sortCol === col) setSortDir((d) => d === "asc" ? "desc" : "asc");
@@ -364,6 +383,14 @@ export default function PaymentPreviewTable({
             <span className="font-semibold">{selectedMatchedCount}</span> selected
           </span>
 
+          <button
+            onClick={resetWidths}
+            title="Reset column widths to default"
+            className="text-xs text-muted hover:text-ink border border-line hover:border-ink/25 rounded-lg px-2 py-1 transition-all"
+          >
+            Reset columns
+          </button>
+
           {/* Push selected */}
           <button
             onClick={() => {
@@ -398,10 +425,15 @@ export default function PaymentPreviewTable({
 
       {/* Table */}
       <div className="overflow-auto flex-1 min-h-0">
-        <table className="w-full text-xs border-collapse" style={{ minWidth: 1000 }}>
+        {/* minWidth 100% lets the columns share leftover space on wide screens;
+            width=totalWidth keeps the drag-set sizes and scrolls when they exceed the viewport */}
+        <table className="text-xs border-collapse" style={{ tableLayout: "fixed", width: totalWidth, minWidth: "100%" }}>
+          <colgroup>
+            {COLUMNS.map((c) => <col key={c.key} style={{ width: widths[c.key] }} />)}
+          </colgroup>
           <thead className="sticky top-0 z-10 bg-shell">
             <tr>
-              <th className="px-4 py-2 w-10 text-left align-middle">
+              <th className="relative px-4 py-2 text-left align-middle">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -410,17 +442,18 @@ export default function PaymentPreviewTable({
                   className="rounded border-white/30 accent-white"
                   title={allSelected ? "Deselect all" : "Select all matched"}
                 />
+                <ResizeHandle onPointerDown={(e) => startResize("select", e)} />
               </th>
-              <th className="px-4 py-2 w-24 text-left align-middle"><SortBtn col="status" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Status</SortBtn></th>
-              <th className="px-4 py-2 w-36 text-left align-middle"><SortBtn col="source" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Source</SortBtn></th>
-              <th className="px-4 py-2 w-28 text-left align-middle"><SortBtn col="mf"     sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>MF No.</SortBtn></th>
-              <th className="px-4 py-2 w-44 text-left align-middle"><SortBtn col="name"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Name</SortBtn></th>
-              <th className="px-4 py-2 w-28 text-left align-middle"><SortBtn col="date"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Date</SortBtn></th>
-              <th className="px-4 py-2 w-16 text-left align-middle"><SortBtn col="month"  sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Month</SortBtn></th>
-              <th className="px-4 py-2 w-24 text-left align-middle"><SortBtn col="amount" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Amount</SortBtn></th>
-              <th className="px-4 py-2 w-36 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">New Total</span></th>
-              <th className="px-4 py-2 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">Issues</span></th>
-              <th className="px-3 py-2 w-16 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">Actions</span></th>
+              <th className="relative px-4 py-2 text-left align-middle"><SortBtn col="status" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Status</SortBtn><ResizeHandle onPointerDown={(e) => startResize("status", e)} /></th>
+              <th className="relative px-4 py-2 text-left align-middle"><SortBtn col="source" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Source</SortBtn><ResizeHandle onPointerDown={(e) => startResize("source", e)} /></th>
+              <th className="relative px-4 py-2 text-left align-middle"><SortBtn col="mf"     sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>MF No.</SortBtn><ResizeHandle onPointerDown={(e) => startResize("mf", e)} /></th>
+              <th className="relative px-4 py-2 text-left align-middle"><SortBtn col="name"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Name</SortBtn><ResizeHandle onPointerDown={(e) => startResize("name", e)} /></th>
+              <th className="relative px-4 py-2 text-left align-middle"><SortBtn col="date"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Date</SortBtn><ResizeHandle onPointerDown={(e) => startResize("date", e)} /></th>
+              <th className="relative px-4 py-2 text-left align-middle"><SortBtn col="month"  sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Month</SortBtn><ResizeHandle onPointerDown={(e) => startResize("month", e)} /></th>
+              <th className="relative px-4 py-2 text-left align-middle"><SortBtn col="amount" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Amount</SortBtn><ResizeHandle onPointerDown={(e) => startResize("amount", e)} /></th>
+              <th className="relative px-4 py-2 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">New Total</span><ResizeHandle onPointerDown={(e) => startResize("newTotal", e)} /></th>
+              <th className="relative px-4 py-2 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">Issues</span><ResizeHandle onPointerDown={(e) => startResize("issues", e)} /></th>
+              <th className="relative px-3 py-2 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">Actions</span></th>
             </tr>
             <tr className="border-b border-white/10">
               <td className="px-4 pb-2"></td>

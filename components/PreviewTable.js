@@ -3,6 +3,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { MASTER_COLS } from "@/config/columns";
 import ErrorBadge from "./ErrorBadge";
 import { exportReviewReport, exportAllRegionsSeparate, exportAllRegionsCombined } from "@/lib/exportReviewReport";
+import { useColumnWidths, ResizeHandle } from "./useColumnWidths";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -45,6 +46,25 @@ const MISMATCH_LABEL = {
   EMAIL_MISMATCH:   "Email",
   REGION_MISMATCH:  "Region",
 };
+
+// Column layout for the main preview table. Widths are the defaults; the user can
+// drag any column edge to resize, and the result is persisted per browser.
+const COLUMNS = [
+  { key: "select",  width:  44, min:  44 },
+  { key: "status",  width: 112, min:  80 },
+  { key: "mf",      width: 150, min:  90 },
+  { key: "name",    width: 220, min: 110 },
+  { key: "region",  width: 130, min:  90 },
+  { key: "nric",    width: 130, min:  80 },
+  { key: "contact", width: 130, min:  90 },
+  { key: "email",   width: 220, min: 110 },
+  { key: "service", width: 120, min:  80 },
+  { key: "pledge",  width: 120, min:  80 },
+  { key: "issues",  width: 170, min: 100 },
+  { key: "actions", width:  84, min:  72 },
+];
+
+const COL_WIDTH_STORAGE_KEY = "mfp.pledgeTable.colWidths";
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -103,7 +123,7 @@ function EndCell({ result, colIndex, mono = false, fieldOverrides, onFieldOverri
               key={key}
               onClick={() => onFieldOverride(result.pabblyIndex, colIndex, key)}
               title={key === "master" ? "Keep value from Google Sheets" : "Use value from Pabbly form"}
-              className={`text-left px-2 py-1 rounded-lg border text-xs transition-all ${
+              className={`text-left px-2 py-1 rounded-lg border text-xs wrap-break-word transition-all ${
                 choice === key
                   ? "bg-green-600 text-white border-green-600 font-medium"
                   : "text-ink border-line hover:border-ink/25"
@@ -416,6 +436,7 @@ export default function PreviewTable({
   const [sortCol,        setSortCol]        = useState(null);
   const [sortDir,        setSortDir]        = useState("asc");
   const [showExportModal, setShowExportModal] = useState(false);
+  const { widths, startResize, resetWidths, totalWidth } = useColumnWidths(COL_WIDTH_STORAGE_KEY, COLUMNS);
 
   function handleSort(col) {
     if (sortCol === col) setSortDir((d) => d === "asc" ? "desc" : "asc");
@@ -566,15 +587,28 @@ export default function PreviewTable({
             <span className="text-sm text-ink pl-1 border-l border-line">
               <span className="font-semibold">{selected.size}</span> selected
             </span>
+
+            <button
+              onClick={resetWidths}
+              title="Reset column widths to default"
+              className="text-xs text-muted hover:text-ink border border-line hover:border-ink/25 rounded-lg px-2 py-1 transition-all"
+            >
+              Reset columns
+            </button>
           </div>
         </div>
 
         {/* Scrollable table */}
         <div className="overflow-auto flex-1 min-h-0">
-          <table className="w-full text-xs border-collapse" style={{ minWidth: 1100 }}>
+          {/* minWidth 100% lets the columns share any leftover space on wide screens;
+              width=totalWidth keeps the drag-set sizes and scrolls when they exceed the viewport */}
+          <table className="text-xs border-collapse" style={{ tableLayout: "fixed", width: totalWidth, minWidth: "100%" }}>
+            <colgroup>
+              {COLUMNS.map((c) => <col key={c.key} style={{ width: widths[c.key] }} />)}
+            </colgroup>
             <thead className="sticky top-0 z-10 bg-shell">
               <tr>
-                <th className="px-4 py-2 w-10 text-left align-middle">
+                <th className="relative px-4 py-2 text-left align-middle">
                   <input
                     type="checkbox"
                     checked={allFilteredSelected}
@@ -583,18 +617,19 @@ export default function PreviewTable({
                     className="rounded border-white/30 accent-white"
                     title={allFilteredSelected ? "Deselect all" : "Select all"}
                   />
+                  <ResizeHandle onPointerDown={(e) => startResize("select", e)} />
                 </th>
-                <th className="px-4 py-2 w-28 text-left align-middle"><SortBtn col="status" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Status</SortBtn></th>
-                <th className="px-4 py-2 w-32 text-left align-middle"><SortBtn col="mf"     sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>MF No.</SortBtn></th>
-                <th className="px-4 py-2 w-44 text-left align-middle"><SortBtn col="name"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Full Name</SortBtn></th>
-                <th className="px-4 py-2 w-28 text-left align-middle"><SortBtn col="region" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Region</SortBtn></th>
-                <th className="px-4 py-2 w-24 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">NRIC</span></th>
-                <th className="px-4 py-2 w-28 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">Contact</span></th>
-                <th className="px-4 py-2 w-52 text-left align-middle"><SortBtn col="email"  sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Email</SortBtn></th>
-                <th className="px-4 py-2 w-28 text-left align-middle"><SortBtn col="service" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Service</SortBtn></th>
-                <th className="px-4 py-2 w-28 text-left align-middle"><SortBtn col="pledge" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Pledge</SortBtn></th>
-                <th className="px-4 py-2 w-40 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">Issues</span></th>
-                <th className="px-3 py-2 w-20 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">Actions</span></th>
+                <th className="relative px-4 py-2 text-left align-middle"><SortBtn col="status" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Status</SortBtn><ResizeHandle onPointerDown={(e) => startResize("status", e)} /></th>
+                <th className="relative px-4 py-2 text-left align-middle"><SortBtn col="mf"     sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>MF No.</SortBtn><ResizeHandle onPointerDown={(e) => startResize("mf", e)} /></th>
+                <th className="relative px-4 py-2 text-left align-middle"><SortBtn col="name"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Full Name</SortBtn><ResizeHandle onPointerDown={(e) => startResize("name", e)} /></th>
+                <th className="relative px-4 py-2 text-left align-middle"><SortBtn col="region" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Region</SortBtn><ResizeHandle onPointerDown={(e) => startResize("region", e)} /></th>
+                <th className="relative px-4 py-2 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">NRIC</span><ResizeHandle onPointerDown={(e) => startResize("nric", e)} /></th>
+                <th className="relative px-4 py-2 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">Contact</span><ResizeHandle onPointerDown={(e) => startResize("contact", e)} /></th>
+                <th className="relative px-4 py-2 text-left align-middle"><SortBtn col="email"  sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Email</SortBtn><ResizeHandle onPointerDown={(e) => startResize("email", e)} /></th>
+                <th className="relative px-4 py-2 text-left align-middle"><SortBtn col="service" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Service</SortBtn><ResizeHandle onPointerDown={(e) => startResize("service", e)} /></th>
+                <th className="relative px-4 py-2 text-left align-middle"><SortBtn col="pledge" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}>Pledge</SortBtn><ResizeHandle onPointerDown={(e) => startResize("pledge", e)} /></th>
+                <th className="relative px-4 py-2 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">Issues</span><ResizeHandle onPointerDown={(e) => startResize("issues", e)} /></th>
+                <th className="relative px-3 py-2 text-left align-middle"><span className="font-bold text-white uppercase tracking-wider text-xs">Actions</span></th>
               </tr>
               <tr className="border-b border-white/10">
                 <td className="px-4 pb-2"></td>

@@ -75,7 +75,7 @@ export default function PledgePage() {
   const router = useRouter();
 
   const [sheetId,    setSheetId]    = useState("");
-  const [tabName,    setTabName]    = useState("Sheet1");
+  const [tabName,    setTabName]    = useState("Master");
   const [sheetTitle, setSheetTitle] = useState("");
   const [phase,      setPhase]      = useState(PHASES.LOADING);
 
@@ -124,9 +124,9 @@ export default function PledgePage() {
     const { sheetId: sid, tabName: tab, sheetTitle: title } = getConfig();
     if (!sid) { router.replace("/"); return; }
     setSheetId(sid);
-    setTabName(tab ?? "Sheet1");
+    setTabName(tab ?? "Master");
     setSheetTitle(title ?? sid);
-    initPage(sid, tab ?? "Sheet1");
+    initPage(sid, tab ?? "Master");
   }, []);
 
   async function loadLog(sid) {
@@ -804,10 +804,17 @@ export default function PledgePage() {
               View Pledge History
             </button>
           )}
+          <button
+            onClick={() => router.push("/help")}
+            className="text-xs bg-surface/10 hover:bg-surface/20 text-white px-3 py-1.5 rounded-lg font-medium border border-white/10 transition-all"
+          >
+            How to use
+          </button>
         </div>
       </header>
 
-      <main className={`max-w-7xl mx-auto px-6 ${phase === PHASES.PREVIEW ? "py-4" : "py-10"}`}>
+      {/* Review table gets the full viewport width (the other phases stay centred and narrow) */}
+      <main className={phase === PHASES.PREVIEW ? "w-full px-8 py-6" : "max-w-7xl mx-auto px-6 py-10"}>
 
         {/* ── LOADING ── */}
         {phase === PHASES.LOADING && (
