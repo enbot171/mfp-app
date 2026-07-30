@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import DropZone from "@/components/DropZone";
 import PreviewTable from "@/components/PreviewTable";
+import UploadStatus from "@/components/UploadStatus";
 import { parseFile } from "@/lib/parseFile";
 import { matchRows } from "@/lib/matchRows";
 import { parseReviewResponse } from "@/lib/parseReviewResponse";
@@ -900,17 +901,7 @@ export default function PledgePage() {
               <DropZone onFile={handleFile} />
             </div>
 
-            {statusMsg && (
-              <div className="mt-4 flex items-center justify-center gap-2">
-                {statusMsg.endsWith("…") && (
-                  <svg className="w-4 h-4 text-faint animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
-                )}
-                <p className="text-sm text-muted">{statusMsg}</p>
-              </div>
-            )}
+            {statusMsg && <UploadStatus message={statusMsg} />}
           </div>
         )}
 

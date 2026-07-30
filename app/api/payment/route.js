@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { readPaymentLog, appendToPaymentLog, pushPaymentUpdates } from "@/lib/googleSheets";
 import { NextResponse } from "next/server";
+import { friendlySheetError } from "@/lib/sheetErrors";
 
 // GET /api/payment?sheetId=...
 // Returns fingerprints from both _payment_ledger (legacy) and _payment_log_ (Status=pushed)
@@ -14,7 +15,7 @@ export async function GET(req) {
     return NextResponse.json({ fingerprints, rows: logRows });
   } catch (err) {
     console.error("readPaymentLog error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: friendlySheetError(err) }, { status: 500 });
   }
 }
 
@@ -38,6 +39,6 @@ export async function POST(req) {
     return NextResponse.json({ pushed: updates.length, snapshot });
   } catch (err) {
     console.error("pushPaymentUpdates error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: friendlySheetError(err) }, { status: 500 });
   }
 }

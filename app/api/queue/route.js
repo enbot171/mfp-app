@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { listQueueTabs, readQueueTab, writeQueueTab, deleteQueueTab } from "@/lib/googleSheets";
 import { NextResponse } from "next/server";
+import { friendlySheetError } from "@/lib/sheetErrors";
 
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
@@ -19,7 +20,7 @@ export async function GET(req) {
     return NextResponse.json({ rows: rows ?? null });
   } catch (err) {
     console.error("readQueueTab error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: friendlySheetError(err) }, { status: 500 });
   }
 }
 
@@ -32,7 +33,7 @@ export async function POST(req) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("writeQueueTab error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: friendlySheetError(err) }, { status: 500 });
   }
 }
 
@@ -45,6 +46,6 @@ export async function DELETE(req) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("deleteQueueTab error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: friendlySheetError(err) }, { status: 500 });
   }
 }

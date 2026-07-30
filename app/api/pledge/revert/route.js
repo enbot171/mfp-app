@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { revertPledgeUpdates, markPledgeLogReverted } from "@/lib/googleSheets";
 import { NextResponse } from "next/server";
+import { friendlySheetError } from "@/lib/sheetErrors";
 
 // POST /api/pledge/revert
 // Body: { sheetId, snapshot, fingerprints }
@@ -19,6 +20,6 @@ export async function POST(req) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("revertPledgeUpdates error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: friendlySheetError(err) }, { status: 500 });
   }
 }

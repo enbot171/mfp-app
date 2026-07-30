@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { revertPaymentUpdates, markLogReverted } from "@/lib/googleSheets";
 import { NextResponse } from "next/server";
+import { friendlySheetError } from "@/lib/sheetErrors";
 
 // POST /api/payment/revert
 // Body: { sheetId, tab, cells: [{range, masterRowIndex, monthColIndex, previousValue, pledgeAmount}], fingerprints: string[] }
@@ -21,6 +22,6 @@ export async function POST(req) {
     return NextResponse.json({ reverted: cells.length });
   } catch (err) {
     console.error("revertPaymentUpdates error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: friendlySheetError(err) }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { fetchMasterSheet, addMonthColumns } from "@/lib/googleSheets";
 import { NextResponse } from "next/server";
+import { friendlySheetError } from "@/lib/sheetErrors";
 
 export async function GET(req) {
   const { searchParams } = new URL(req.url);
@@ -15,7 +16,7 @@ export async function GET(req) {
     return NextResponse.json(data);
   } catch (err) {
     console.error("fetchMasterSheet error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: friendlySheetError(err, { tab }) }, { status: 500 });
   }
 }
 
@@ -32,6 +33,6 @@ export async function POST(req) {
     return NextResponse.json({ added });
   } catch (err) {
     console.error("addMonthColumns error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: friendlySheetError(err) }, { status: 500 });
   }
 }

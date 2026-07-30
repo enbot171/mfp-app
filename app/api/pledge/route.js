@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { readPledgeLog, appendToPledgeLog, pushPledgeToMaster } from "@/lib/googleSheets";
 import { NextResponse } from "next/server";
+import { friendlySheetError } from "@/lib/sheetErrors";
 
 // GET /api/pledge?sheetId=...
 // Returns { fingerprints, rows } from _pledge_log_ (Status=pushed)
@@ -14,7 +15,7 @@ export async function GET(req) {
     return NextResponse.json({ fingerprints, rows: logRows });
   } catch (err) {
     console.error("readPledgeLog error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: friendlySheetError(err) }, { status: 500 });
   }
 }
 
@@ -35,6 +36,6 @@ export async function POST(req) {
     return NextResponse.json({ updated: result.updated, appended: result.appended, snapshot: result.snapshot });
   } catch (err) {
     console.error("pushPledgeToMaster error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: friendlySheetError(err) }, { status: 500 });
   }
 }
