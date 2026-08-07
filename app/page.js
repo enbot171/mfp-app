@@ -3,7 +3,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 const SESSION_KEY = "mfp_sheet_config";
-const SERVICE_ACCOUNT_EMAIL = "mfp-app-service@mfp-app-498015.iam.gserviceaccount.com";
 
 function extractSheetId(value) {
   const match = value.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
@@ -25,12 +24,21 @@ export default function HomePage() {
   const [connectError, setConnectError] = useState(null);
   const [connecting,   setConnecting]   = useState(false);
   const [copied,       setCopied]       = useState(false);
+  const [serviceAccountEmail, setServiceAccountEmail] = useState("");
 
   const router = useRouter();
 
+  // Served from env (GOOGLE_SERVICE_ACCOUNT_EMAIL) so the address isn't hardcoded in source.
+  useEffect(() => {
+    fetch("/api/service-account")
+      .then((r) => r.json())
+      .then((d) => setServiceAccountEmail(d.email || ""))
+      .catch(() => {});
+  }, []);
+
   async function copyEmail() {
     try {
-      await navigator.clipboard.writeText(SERVICE_ACCOUNT_EMAIL);
+      await navigator.clipboard.writeText(serviceAccountEmail);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch { /* clipboard unavailable — user can still select the text */ }
@@ -108,7 +116,7 @@ export default function HomePage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.206" />
             </svg>
-            <span className="font-mono truncate">{SERVICE_ACCOUNT_EMAIL}</span>
+            <span className="font-mono truncate">{serviceAccountEmail}</span>
             <span className="shrink-0">
               {copied ? (
                 <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -167,7 +175,7 @@ export default function HomePage() {
                     onClick={copyEmail}
                     className="mt-3 w-full flex items-center justify-between gap-2 bg-surface border border-accent/20 rounded-xl px-3 py-2 text-left hover:border-accent/40 transition-colors"
                   >
-                    <span className="font-mono text-sm text-ink truncate">{SERVICE_ACCOUNT_EMAIL}</span>
+                    <span className="font-mono text-sm text-ink truncate">{serviceAccountEmail}</span>
                     <span className={`shrink-0 flex items-center gap-1 text-xs font-semibold ${copied ? "text-success" : "text-accent"}`}>
                       {copied ? (
                         <>
